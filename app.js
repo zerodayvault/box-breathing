@@ -7,6 +7,12 @@ const PHASES = [
   { key: "hold2",  label: "Пауза", edge: "left"   }, // снизу вверх
 ];
 
+// edge name -> fill element id
+const FILL_IDS = { top: "fill-top", right: "fill-right", bottom: "fill-bottom", left: "fill-left" };
+
+const SCALE_MIN = 0.94;
+const SCALE_MAX = 1.05;
+
 const state = {
   phaseDuration: 4,   // секунды на фазу
   totalCycles: 5,
@@ -18,6 +24,7 @@ const state = {
   pauseStart: 0,
   rafId: null,
   audioCtx: null,
+  lastCount: null,    // для анимации смены цифры
 };
 
 /* ---------- DOM ---------- */
@@ -28,10 +35,14 @@ const screens = {
   done: $("screen-done"),
 };
 const dot = $("dot");
+const box = $("box");
 const phaseLabel = $("phase-label");
 const countLabel = $("count-label");
 const cycleLabel = $("cycle-label");
 const btnPause = $("btn-pause");
+const fills = Object.fromEntries(
+  Object.entries(FILL_IDS).map(([edge, id]) => [edge, $(id)])
+);
 
 /* ---------- Экраны ---------- */
 function showScreen(name) {
@@ -43,8 +54,12 @@ function showScreen(name) {
 function bindStepper(minusId, plusId, valueId, get, set, min, max, format) {
   const valueEl = $(valueId);
   const render = () => { valueEl.textContent = format(get()); };
-  $(minusId).addEventListener("click", () => { set(Math.max(min, get() - 1)); render(); });
-  $(plusId).addEventListener("click",  () => { set(Math.min(max, get() + 1)); render(); });
+  $(minusId).addEventListener("click", () => {
+    set(Math.max(min, get() - 1)); render(); buzz(10);
+  });
+  $(plusId).addEventListener("click", () => {
+    set(Math.min(max, get() + 1)); render(); buzz(10);
+  });
   render();
 }
 
@@ -75,22 +90,60 @@ function beep(freq = 660, duration = 0.12) {
 }
 
 /* ---------- Вибрация ---------- */
-function buzz(ms = 40) {
-  if (navigator.vibrate) navigator.vibrate(ms);
+function buzz(pattern = 40) {
+  if (navigator.vibrate) navigator.vibrate(pattern);
 }
 
-/* ---------- Позиция точки на периметре квадрата ---------- */
+/* ---------- Easing ---------- */
+// Мягкая "дыхательная" кривая: плавный вход и выход
+function easeInOutSine(t) {
+  return -(Math.cos(Math.PI * t) - 1) / 2;
+}
+
+/* ---------- Отрисовка ---------- */
 function moveDot(edge, progress) {
-  // progress: 0..1 вдоль текущей стороны
   let x, y; // в процентах 0..100
   switch (edge) {
-    case "top":    x = progress * 100;       y = 0;                 break;
-    case "right":  x = 100;                  y = progress * 100;    break;
-    case "bottom": x = (1 - progress) * 100; y = 100;               break;
+    case "top":    x = progress * 100;       y = 0;                    break;
+    case "right":  x = 100;                  y = progress * 100;       break;
+    case "bottom": x = (1 - progress) * 100; y = 100;                  break;
     case "left":   x = 0;                    y = (1 - progress) * 100; break;
   }
   dot.style.left = x + "%";
   dot.style.top = y + "%";
+}
+
+function setFill(edge, value) {
+  const el = fills[edge];
+  if (!el) return;
+  if (edge === "top" || edge === "bottom") el.style.transform = `scaleX(${value})`;
+  else el.style.transform = `scaleY(${value})`;
+}
+
+// "Дыхание" квадрата: расширяется на вдохе, сжимается на выдохе
+function boxScaleFor(phaseKey, progress) {
+  const t = easeInOutSine(progress);
+  switch (phaseKey) {
+    case "inhale": return SCALE_MIN + (SCALE_MAX - SCALE_MIN) * t;
+    case "hold1":  return SCALE_MAX;
+    case "exhale": return SCALE_MAX - (SCALE_MAX - SCALE_MIN) * t;
+    case "hold2":  return SCALE_MIN;
+  }
+}
+
+function animateCount(n) {
+  if (n === state.lastCount) return;
+  state.lastCount = n;
+  countLabel.textContent = n;
+  countLabel.classList.remove("tick");
+  void countLabel.offsetWidth; // перезапуск анимации
+  countLabel.classList.add("tick");
+}
+
+function animatePhaseSwap() {
+  phaseLabel.classList.remove("swap");
+  void phaseLabel.offsetWidth;
+  phaseLabel.classList.add("swap");
 }
 
 /* ---------- Цикл таймера ---------- */
@@ -102,9 +155,11 @@ function tick(now) {
   const progress = Math.min(elapsed / state.phaseDuration, 1);
 
   moveDot(phase.edge, progress);
+  setFill(phase.edge, progress);
+  box.style.transform = `scale(${boxScaleFor(phase.key, progress)})`;
 
   const remaining = Math.ceil(state.phaseDuration - elapsed);
-  countLabel.textContent = Math.max(remaining, 0);
+  animateCount(Math.max(remaining, 0));
 
   if (elapsed >= state.phaseDuration) {
     nextPhase(now);
@@ -125,6 +180,7 @@ function nextPhase(now) {
   }
   const phase = PHASES[state.phaseIndex];
   phaseLabel.textContent = phase.label;
+  animatePhaseSwap();
   state.phaseStart = now;
   beep(state.phaseIndex === 0 ? 880 : 660);
   buzz(30);
@@ -136,10 +192,14 @@ function start() {
   state.paused = false;
   state.cycle = 1;
   state.phaseIndex = 0;
+  state.lastCount = null;
   phaseLabel.textContent = PHASES[0].label;
   cycleLabel.textContent = `Цикл 1 / ${state.totalCycles}`;
   countLabel.textContent = state.phaseDuration;
   btnPause.textContent = "Пауза";
+  Object.keys(fills).forEach((edge) => setFill(edge, 0));
+  box.style.transform = `scale(${SCALE_MIN})`;
+  moveDot("top", 0);
   showScreen("session");
   beep(880);
   buzz(50);
@@ -187,8 +247,7 @@ $("btn-stop").addEventListener("click", stop);
 $("btn-again").addEventListener("click", start);
 $("btn-settings").addEventListener("click", stop);
 
-/* Не даём экрану уснуть во время сессии (NoSleep через видео-трюк не нужен —
-   requestWakeLock поддерживается в Safari 16.4+) */
+/* Не даём экрану уснуть во время сессии (Wake Lock API, Safari 16.4+) */
 let wakeLock = null;
 async function requestWakeLock() {
   try {

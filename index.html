@@ -7,7 +7,7 @@
   <!-- PWA / iOS -->
   <title>Квадратное дыхание</title>
   <meta name="description" content="Таймер квадратного дыхания 4-4-4-4">
-  <meta name="theme-color" content="#0e1116">
+  <meta name="theme-color" content="#0b0e13">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -57,11 +57,15 @@
       </div>
 
       <div class="box-stage">
-        <div class="box">
+        <div class="box" id="box">
           <div class="box__edge box__edge--top"></div>
           <div class="box__edge box__edge--right"></div>
           <div class="box__edge box__edge--bottom"></div>
           <div class="box__edge box__edge--left"></div>
+          <div class="box__fill box__fill--top" id="fill-top"></div>
+          <div class="box__fill box__fill--right" id="fill-right"></div>
+          <div class="box__fill box__fill--bottom" id="fill-bottom"></div>
+          <div class="box__fill box__fill--left" id="fill-left"></div>
           <div class="dot" id="dot"></div>
         </div>
         <div class="session__center">
@@ -78,7 +82,7 @@
 
     <!-- Экран завершения -->
     <section class="screen screen--done hidden" id="screen-done">
-      <div class="done__emoji">🌬️</div>
+      <div class="done__badge"><svg viewBox="0 0 52 52" width="72" height="72" aria-hidden="true"><circle class="done__badge-circle" cx="26" cy="26" r="24" fill="none"/><path class="done__badge-check" fill="none" d="M14 27l8 8 16-17"/></svg></div>
       <h2 class="done__title">Готово!</h2>
       <p class="done__text" id="done-text">5 циклов · 80 секунд</p>
       <button class="btn btn--primary" id="btn-again">Ещё раз</button>
@@ -90,3 +94,4 @@
   <script src="app.js"></script>
 </body>
 </html>
+
