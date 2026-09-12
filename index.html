@@ -1,0 +1,92 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+
+  <!-- PWA / iOS -->
+  <title>Квадратное дыхание</title>
+  <meta name="description" content="Таймер квадратного дыхания 4-4-4-4">
+  <meta name="theme-color" content="#0e1116">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Дыхание">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app" id="app">
+
+    <!-- Экран настройки -->
+    <section class="screen screen--setup" id="screen-setup">
+      <h1 class="title">Квадратное<br>дыхание</h1>
+      <p class="subtitle">Вдох · Пауза · Выдох · Пауза</p>
+
+      <div class="settings">
+        <div class="setting">
+          <span class="setting__label">Длительность фазы</span>
+          <div class="stepper">
+            <button class="stepper__btn" id="phase-minus" aria-label="Меньше">−</button>
+            <span class="stepper__value" id="phase-value">4 с</span>
+            <button class="stepper__btn" id="phase-plus" aria-label="Больше">+</button>
+          </div>
+        </div>
+
+        <div class="setting">
+          <span class="setting__label">Количество циклов</span>
+          <div class="stepper">
+            <button class="stepper__btn" id="cycles-minus" aria-label="Меньше">−</button>
+            <span class="stepper__value" id="cycles-value">5</span>
+            <button class="stepper__btn" id="cycles-plus" aria-label="Больше">+</button>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn--primary" id="btn-start">Начать</button>
+    </section>
+
+    <!-- Экран сессии -->
+    <section class="screen screen--session hidden" id="screen-session">
+      <div class="session__top">
+        <span class="session__cycle" id="cycle-label">Цикл 1 / 5</span>
+      </div>
+
+      <div class="box-stage">
+        <div class="box">
+          <div class="box__edge box__edge--top"></div>
+          <div class="box__edge box__edge--right"></div>
+          <div class="box__edge box__edge--bottom"></div>
+          <div class="box__edge box__edge--left"></div>
+          <div class="dot" id="dot"></div>
+        </div>
+        <div class="session__center">
+          <div class="session__phase" id="phase-label">Вдох</div>
+          <div class="session__count" id="count-label">4</div>
+        </div>
+      </div>
+
+      <div class="session__controls">
+        <button class="btn btn--ghost" id="btn-pause">Пауза</button>
+        <button class="btn btn--ghost" id="btn-stop">Закончить</button>
+      </div>
+    </section>
+
+    <!-- Экран завершения -->
+    <section class="screen screen--done hidden" id="screen-done">
+      <div class="done__emoji">🌬️</div>
+      <h2 class="done__title">Готово!</h2>
+      <p class="done__text" id="done-text">5 циклов · 80 секунд</p>
+      <button class="btn btn--primary" id="btn-again">Ещё раз</button>
+      <button class="btn btn--ghost" id="btn-settings">Настройки</button>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
