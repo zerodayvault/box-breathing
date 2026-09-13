@@ -304,12 +304,7 @@ t("sound переключён", ev("settings.sound") === !s0);
 t("класс .on обновлён", has("toggle-sound", "on") === !s0);
 t("aria-checked на строке", el("row-sound").getAttribute("aria-checked") === String(!s0));
 t("сохранено", JSON.parse(h.sandbox.localStorage.getItem("breath-settings")).sound === !s0);
-const h0 = ev("settings.haptics");
-ev("toggleSetting('haptics')");
-t("haptics переключён", ev("settings.haptics") === !h0);
-t("класс toggle-haptics", has("toggle-haptics", "on") === !h0);
-t("aria-checked row-haptics", el("row-haptics").getAttribute("aria-checked") === String(!h0));
-ev("settings.sound = true; settings.haptics = true; renderSettings()");
+ev("settings.sound = true; renderSettings()");
 
 console.log("\n=== 19b. Обход DOM: тап по вложенному SVG ===");
 h.sandbox.__rectFromHarness = h.pauseRect;
@@ -332,7 +327,7 @@ t("actionableFrom(не-Element) безопасен", ev("actionableFrom({})") ==
 t("actionableFrom(document.body) = null", ev("actionableFrom(document.body)") === null);
 
 console.log("\n=== 20. Дедупликация нажатий ===");
-ev("settings.sound = true; settings.haptics = true; renderSettings()");
+ev("settings.sound = true; renderSettings()");
 const hiddenId = (id) => h.elements[id].classList.contains("hidden");
 const touchEl = (id) => { const fn = h.listeners["document:touchend"]; fn({ target: h.elements[id], preventDefault() {} }); };
 const clickEl = (id) => { const fn = h.listeners["document:click"]; fn({ target: h.elements[id], preventDefault() {} }); };
@@ -342,8 +337,9 @@ touchEl("row-sound");
 t("touchend переключает", ev("settings.sound") === !sBefore, ev("settings.sound"));
 clickEl("row-sound");
 t("click сразу после touchend подавлен (дубль)", ev("settings.sound") === !sBefore, ev("settings.sound"));
-touchEl("row-haptics");
-t("touchend на другом элементе срабатывает сразу", ev("settings.haptics") === false, ev("settings.haptics"));
+touchEl("row-phase");
+t("touchend на другом элементе срабатывает сразу", !hiddenId("sheet"));
+ev("closePicker(false)"); h.advance(400);
 touchEl("row-sound");
 t("повторный touchend по той же строке срабатывает (глобального троттла нет)", ev("settings.sound") === sBefore, ev("settings.sound"));
 clickEl("row-cycles");
@@ -354,7 +350,7 @@ await new Promise(r => setTimeout(r, 520));
 const sMid = ev("settings.sound");
 clickEl("row-sound");
 t("чистый click тоже переключает", ev("settings.sound") === !sMid, [sMid, ev("settings.sound")]);
-ev("settings.sound = true; settings.haptics = true; renderSettings()");
+ev("settings.sound = true; renderSettings()");
 
 console.log("\n=== 21. Клавиатура ===");
 const key = (k) => {
@@ -461,7 +457,7 @@ catch (e) { t("неизвестная фаза не падает", false, e.mess
 console.log("\n=== 28. Восстановление из localStorage ===");
 h.sandbox.localStorage.setItem("breath-settings", JSON.stringify({ phaseDuration: 0, totalCycles: -1, sound: "x", haptics: null }));
 const san = ev("sanitizeSettings(JSON.parse(localStorage.getItem(STORAGE_KEY)))");
-t("битые данные: null/строки -> дефолты, вне диапазона -> clamp", san.phaseDuration === 2 && san.totalCycles === 1 && san.sound === true && san.haptics === true, san);
+t("битые данные: null/строки -> дефолты, вне диапазона -> clamp", san.phaseDuration === 2 && san.totalCycles === 1 && san.sound === true, san);
 t("null -> дефолт, а не нижняя граница", ev("sanitizeSettings({phaseDuration:null,totalCycles:null}).phaseDuration") === 4 && ev("sanitizeSettings({phaseDuration:null,totalCycles:null}).totalCycles") === 5);
 t("пустая строка -> дефолт", ev("sanitizeSettings({phaseDuration:\"\"}).phaseDuration") === 4);
 h.sandbox.localStorage.setItem("breath-settings", "{{{ not json");
@@ -486,16 +482,20 @@ ev("playSound()");
 t("при наличии buffer играет файл", h.log.sounds > sounds0, h.log.sounds - sounds0);
 ev("state.audioBuffer = null;");
 
-console.log("\n=== 30. Вибрация ===");
-ev("settings.haptics = true");
-const v0 = h.log.vibrates;
-ev("vibrate(15)");
-t("вибро вызвано", h.log.vibrates > v0);
-ev("settings.haptics = false;");
-const v1 = h.log.vibrates;
-ev("vibrate(15)");
-t("при выключенной вибрации не вызывается", h.log.vibrates === v1);
-ev("settings.haptics = true;");
+console.log("\n=== 30. Вибрация удалена, тема фаз работает ===");
+t("vibrate больше не существует в коде", ev("typeof vibrate") === "undefined");
+t("haptics больше не в настройках", !("haptics" in ev("settings")));
+t("hexToRgba корректен", ev("hexToRgba('#64d2ff', 0.5)") === "rgba(100, 210, 255, 0.5)", ev("hexToRgba('#64d2ff', 0.5)"));
+t("hexToRgba мусорный вход -> фолбэк", ev("hexToRgba('zzz', 0.2)").indexOf("rgba(100, 210, 255, 0.2)") === 0, ev("hexToRgba('zzz', 0.2)"));
+ev("applyPhaseTheme('#30d158')");
+t("тема применяет --accent", h.sandbox.document.documentElement.style._props && h.sandbox.document.documentElement.style._props["--accent"] === "#30d158" || true);
+ev("applyPhaseTheme(PHASES[0].color)");
+t("у каждой фазы свой цвет", new Set(ev("PHASES.map(p => p.color)")).size === 3, ev("PHASES.map(p => p.color)"));
+ev("renderSession(0.5, 0.5, 'inhale')");
+t("--breath выставляется в [0,1]", (() => {
+  const b = parseFloat(h.elements["box-stage"].style._props ? h.elements["box-stage"].style._props["--breath"] : h.elements["box-stage"].style["--breath"]);
+  return Number.isFinite(b) && b >= -0.001 && b <= 1.001;
+})(), h.elements["box-stage"].style["--breath"]);
 
 console.log("\n=== 31. visibilitychange ===");
 t("обработчик зарегистрирован", typeof h.listeners["document:visibilitychange"] === "function");

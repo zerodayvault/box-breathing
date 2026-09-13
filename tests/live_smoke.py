@@ -20,7 +20,7 @@ with sync_playwright() as pw:
     pg.goto(URL, wait_until="networkidle")
     t("сайт открывается", pg.is_visible("#screen-setup"))
     t("новая версия app.js", pg.evaluate("typeof startCountdownInterval === 'function'"))
-    t("строка вибрации на месте", pg.is_visible("#row-haptics"))
+    t("строка вибрации удалена", pg.is_hidden("#row-haptics"))
     pg.wait_for_function("navigator.serviceWorker.controller !== null", timeout=20000)
     t("SW активен", pg.evaluate("navigator.serviceWorker.controller.scriptURL.includes('sw.js')"))
     t("кэш v10", pg.evaluate("caches.keys().then(k => k.some(x => x.includes('v10')))"))

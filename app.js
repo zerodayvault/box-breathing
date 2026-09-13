@@ -3,11 +3,12 @@
    вычисляются из performance.now(), поэтому дрейф, троттлинг таймеров
    и уход вкладки в фон не рассинхронизируют таймер. */
 
+/* У каждой фазы свой акцент: интерфейс мягко перекрашивается по ходу цикла. */
 const PHASES = [
-  { key: "inhale", label: "Вдох"  },
-  { key: "hold1",  label: "Пауза" },
-  { key: "exhale", label: "Выдох" },
-  { key: "hold2",  label: "Пауза" },
+  { key: "inhale", label: "Вдох",  color: "#64d2ff" },
+  { key: "hold1",  label: "Пауза", color: "#5e5ce6" },
+  { key: "exhale", label: "Выдох", color: "#30d158" },
+  { key: "hold2",  label: "Пауза", color: "#5e5ce6" },
 ];
 
 const SCALE_MIN = 0.93;
@@ -42,7 +43,7 @@ function formatDuration(totalSec) {
 }
 
 /* ---------- Настройки ---------- */
-const defaults = { phaseDuration: 4, totalCycles: 5, sound: true, haptics: true };
+const defaults = { phaseDuration: 4, totalCycles: 5, sound: true };
 
 /* Число, приведённое из null/undefined, дало бы 0 и сдвинуло бы значение
    к нижней границе вместо дефолта — поэтому отсутствие поля проверяем отдельно. */
@@ -61,7 +62,6 @@ function sanitizeSettings(raw) {
   out.totalCycles = toBoundedInt(raw.totalCycles, out.totalCycles, CYCLES_MIN, CYCLES_MAX);
 
   if (typeof raw.sound === "boolean") out.sound = raw.sound;
-  if (typeof raw.haptics === "boolean") out.haptics = raw.haptics;
   return out;
 }
 
@@ -101,6 +101,7 @@ const $ = (id) => document.getElementById(id);
 const screens = { setup: $("screen-setup"), session: $("screen-session"), done: $("screen-done") };
 const dot = $("dot");
 const box = $("box");
+const stage = $("box-stage");
 const boxProgress = $("box-progress");
 const phaseLabel = $("phase-label");
 const countLabel = $("count-label");
@@ -134,12 +135,29 @@ function renderSettings() {
   $("phase-value").textContent = `${settings.phaseDuration} сек`;
   $("cycles-value").textContent = `${settings.totalCycles}`;
   setToggle("toggle-sound", settings.sound, "row-sound");
-  setToggle("toggle-haptics", settings.haptics, "row-haptics");
   $("total-hint").textContent =
     `Итого ${formatDuration(settings.phaseDuration * PHASES.length * settings.totalCycles)}`;
 }
 
-/* ---------- Звук и вибро ---------- */
+/* ---------- Тема фазы ---------- */
+function hexToRgba(hex, alpha) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
+  if (!m) return `rgba(100, 210, 255, ${alpha})`;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+/* Акцент живёт в CSS-переменных: прогресс, точка, свечение и кнопки
+   перекрашиваются одним движением, с плавными CSS-переходами. */
+function applyPhaseTheme(color) {
+  const root = document.documentElement.style;
+  root.setProperty("--accent", color);
+  root.setProperty("--accent-glow", hexToRgba(color, 0.5));
+  root.setProperty("--accent-soft", hexToRgba(color, 0.16));
+  root.setProperty("--accent-wash", hexToRgba(color, 0.07));
+}
+
+/* ---------- Звук ---------- */
 let audioLoading = null;
 
 function decodeAudio(ctx, data) {
@@ -213,11 +231,6 @@ function playSound() {
     } catch (e) {}
   }
   playTone(880, 0.15, 0.07);
-}
-
-function vibrate(pattern) {
-  if (!settings.haptics || !navigator.vibrate) return;
-  try { navigator.vibrate(pattern); } catch (e) {}
 }
 
 /* ---------- Easing ---------- */
@@ -325,6 +338,12 @@ function renderSession(overallProgress, phaseProgress, phaseKey) {
     case "hold2":  scale = SCALE_MIN; break;
   }
   box.style.transform = `scale(${scale.toFixed(4)})`;
+
+  // Свечение за квадратом «дышит» синхронно с масштабом.
+  if (stage) {
+    const breath = (scale - SCALE_MIN) / (SCALE_MAX - SCALE_MIN);
+    stage.style.setProperty("--breath", breath.toFixed(3));
+  }
 }
 
 /* ---------- Анимации текста ---------- */
@@ -380,7 +399,7 @@ function countdownStep(token) {
     countLabel.classList.add("countdown");
     countLabel.textContent = state.countdownLeft;
     playTone(440, 0.08, 0.05);
-    vibrate(10);
+
   }
 }
 
@@ -433,8 +452,9 @@ function syncTo(now, isFirst) {
     phaseLabel.textContent = phase.label;
     animatePhaseSwap();
     state.lastCount = null;
-    if (isFirst) { playTone(880, 0.09, 0.05); vibrate(12); }
-    else { playSound(); vibrate(newCycle ? [18, 40, 18] : 15); }
+    applyPhaseTheme(phase.color);
+    if (isFirst) playTone(880, 0.09, 0.05);
+    else playSound();
   }
 
   renderSession((phaseIndex + phaseProgress) / PHASES.length, phaseProgress, phase.key);
@@ -487,6 +507,7 @@ function start() {
   state.countdownLeft = COUNTDOWN_SEC;
   state.audioReady = false;
 
+  applyPhaseTheme(PHASES[0].color);
   cycleLabel.textContent = `Цикл 1 из ${settings.totalCycles}`;
   phaseLabel.textContent = "Приготовьтесь";
   animatePhaseSwap();
@@ -507,7 +528,7 @@ function start() {
       state.audioReady = true;
       try {
         playTone(440, 0.08, 0.05);
-        vibrate(10);
+
       } catch (e) { /* звук не должен блокировать сессию */ }
       startCountdownInterval(token);
     })
@@ -547,7 +568,7 @@ function togglePause() {
     state.pauseStart = performance.now();
     clearTimers();
     setPausedUI(true);
-    vibrate(10);
+
   }
 }
 
@@ -561,6 +582,7 @@ function stop() {
   state.session = null;
   state.lastCount = null;
   releaseWakeLock();
+  applyPhaseTheme(PHASES[0].color);
   renderSettings();
   showScreen("setup");
 }
@@ -579,7 +601,7 @@ function finish() {
     `${cycles} ${plural(cycles, "цикл", "цикла", "циклов")} · ${formatDuration(phaseDuration * PHASES.length * cycles)}`;
 
   playSound();
-  vibrate([20, 60, 20, 60, 30]);
+
   const doneToken = state.sessionToken;
   setTimeout(() => {
     // второй тон финала — только если пользователь ещё не начал новую сессию
@@ -587,6 +609,7 @@ function finish() {
   }, 300);
 
   state.session = null;
+  applyPhaseTheme(PHASES[0].color);
   showScreen("done");
 }
 
@@ -715,7 +738,7 @@ pickerScroll.addEventListener("click", (e) => {
   dragging = false;
   markActiveItem();
   snapToIndex(true);
-  vibrate(8);
+
 });
 
 function openPicker({ title, items, value, onDone, targetRowId }) {
@@ -747,7 +770,7 @@ function closePicker(apply) {
       saveSettings();
       renderSettings();
       if (picker.targetRowId) pulseValue(picker.targetRowId);
-      vibrate(8);
+
     }
   }
 
@@ -797,9 +820,7 @@ function toggleSetting(key) {
   settings[key] = !settings[key];
   saveSettings();
   renderSettings();
-  if (!settings[key]) return;
-  if (key === "sound") ensureAudio().then(() => playSound());
-  if (key === "haptics") vibrate(15);
+  if (settings.sound && key === "sound") ensureAudio().then(() => playSound());
 }
 
 /* ================================================================
@@ -814,7 +835,6 @@ const actions = {
   "row-phase": openPhasePicker,
   "row-cycles": openCyclesPicker,
   "row-sound": () => toggleSetting("sound"),
-  "row-haptics": () => toggleSetting("haptics"),
   "sheet-cancel": () => closePicker(false),
   "sheet-done": () => closePicker(true),
 };

@@ -84,7 +84,13 @@ function makeEl(id, tag) {
   let tc = "";
   Object.assign(el, {
     innerHTML: "",
-    dataset: {}, style: {}, attrs: {},
+    dataset: {}, attrs: {},
+    style: {
+      _props: {},
+      setProperty(k, v) { this._props[k] = String(v); this[k] = String(v); },
+      removeProperty(k) { delete this._props[k]; delete this[k]; },
+      getPropertyValue(k) { return this._props[k] || ""; },
+    },
     offsetWidth: 320, scrollTop: 0,
     parentElement: null,
     children: [],
@@ -134,7 +140,7 @@ function ensure(id) {
 }
 
 const IDS = ["screen-setup","screen-session","screen-done","dot","box","box-progress","phase-label",
-  "count-label","cycle-label","pause-icon","btn-pause","btn-stop","btn-start","btn-again","btn-settings",
+  "count-label","cycle-label","pause-icon","btn-pause","btn-stop","btn-start","btn-again","btn-settings","box-stage",
   "row-phase","row-cycles","row-sound","row-haptics","toggle-sound","toggle-haptics","phase-value",
   "cycles-value","total-hint","done-text","sheet","sheet-backdrop","picker","picker-scroll","sheet-title",
   "sheet-cancel","sheet-done","app-title","box-svg"];
@@ -153,7 +159,7 @@ const appEl = nest(makeEl("app", "main"), bodyEl);
 nest(ensure("sheet"), bodyEl);
 nest(ensure("sheet-backdrop"), bodyEl);
 ["btn-start", "row-phase", "row-cycles", "row-sound", "row-haptics"].forEach(id => nest(ensure(id), ensure("screen-setup")));
-["btn-stop", "btn-pause", "cycle-label", "phase-label", "count-label", "box", "box-progress", "dot"]
+["btn-stop", "btn-pause", "cycle-label", "phase-label", "count-label", "box", "box-progress", "dot", "box-stage"]
   .forEach(id => nest(ensure(id), ensure("screen-session")));
 ["sheet-cancel", "sheet-done", "sheet-title", "picker-scroll"].forEach(id => nest(ensure(id), ensure("sheet")));
 nest(ensure("pause-icon"), ensure("btn-pause"));

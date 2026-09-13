@@ -78,7 +78,7 @@ for cls in ["pulse", "tick", "countdown", "swap", "closing", "hidden", "is-activ
 
 # ---- css selectors vs html ----
 print("\n[css block-level selectors vs html]")
-for sel in ["toggle-haptics", "row-haptics", "app-title", "noscript"]:
+for sel in ["toggle-sound", "row-sound", "app-title", "noscript"]:
     print("  html has", sel, ":", sel in html)
 
 # ---- balanced braces ----

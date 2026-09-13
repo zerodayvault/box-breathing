@@ -55,7 +55,6 @@ with sync_playwright() as pw:
     t("циклы = 5", page.inner_text("#cycles-value") == "5", page.inner_text("#cycles-value"))
     t("hint корректен", page.inner_text("#total-hint") == "Итого 1 мин 20 сек", page.inner_text("#total-hint"))
     t("toggle звука включён", "on" in (page.get_attribute("#toggle-sound", "class") or ""))
-    t("строка вибрации существует", page.is_visible("#row-haptics"))
     t("aria-checked у звука", page.get_attribute("#row-sound", "aria-checked") == "true")
     t("нет горизонтального скролла", page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"),
       page.evaluate("[document.documentElement.scrollWidth, window.innerWidth]"))
@@ -158,10 +157,6 @@ with sync_playwright() as pw:
     t("aria-checked=false", page.get_attribute("#row-sound", "aria-checked") == "false")
     page.click("#row-sound"); page.wait_for_timeout(200)
     t("звук включён обратно", "on" in (page.get_attribute("#toggle-sound", "class") or ""))
-    page.click("#row-haptics"); page.wait_for_timeout(200)
-    t("вибрация выключена", "on" not in (page.get_attribute("#toggle-haptics", "class") or ""))
-    page.click("#row-haptics"); page.wait_for_timeout(200)
-    t("вибрация включена", "on" in (page.get_attribute("#toggle-haptics", "class") or ""))
     # Реальная регрессия: один тап пальцем рождает touchend И click.
     # Без дедупликации тумблер переключился бы дважды и вернулся назад.
     box = page.locator("#row-sound").bounding_box()
@@ -192,7 +187,7 @@ with sync_playwright() as pw:
     t("два быстрых тапа подряд = два переключения (возврат в исходное)", a3 == b3, [b3, a3])
 
     print("\n=== H. Сессия: отсчёт и фазы ===")
-    page.evaluate("localStorage.setItem('breath-settings', JSON.stringify({phaseDuration:4,totalCycles:2,sound:true,haptics:true}))")
+    page.evaluate("localStorage.setItem('breath-settings', JSON.stringify({phaseDuration:4,totalCycles:2,sound:true,sound:true}))")
     page.reload(wait_until="networkidle")
     page.click("#btn-start")
     page.wait_for_selector("#screen-session:not(.hidden)", timeout=3000)
@@ -215,6 +210,17 @@ with sync_playwright() as pw:
 
     cnt = page.inner_text("#count-label")
     t("счётчик в [1,4]", cnt.isdigit() and 1 <= int(cnt) <= 4, cnt)
+
+    print("\n=== I0. Тема фаз ===")
+    c1 = page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()")
+    t("акцент = цвет фазы Вдох", c1 == "#64d2ff", c1)
+    page.wait_for_timeout(4100)
+    c2 = page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()")
+    t("акцент сменился на цвет фазы Пауза", c2 == "#5e5ce6", c2)
+    breath = page.evaluate("getComputedStyle(document.getElementById('box-stage')).getPropertyValue('--breath')")
+    t("--breath выставлен", breath.strip() != "", breath)
+    glow = page.evaluate("getComputedStyle(document.querySelector('.box-stage'), '::before').opacity")
+    t("свечение сцены присутствует", float(glow) > 0, glow)
 
     print("\n=== I. Геометрия точки и прогресса ===")
     geo = page.evaluate("""() => {
@@ -296,7 +302,7 @@ with sync_playwright() as pw:
     page.click("#btn-stop"); page.wait_for_timeout(300)
 
     print("\n=== N. Полное завершение сессии ===")
-    page.evaluate("localStorage.setItem('breath-settings', JSON.stringify({phaseDuration:2,totalCycles:1,sound:true,haptics:true}))")
+    page.evaluate("localStorage.setItem('breath-settings', JSON.stringify({phaseDuration:2,totalCycles:1,sound:true,sound:true}))")
     page.reload(wait_until="networkidle")
     page.click("#btn-start")
     page.wait_for_selector("#screen-done:not(.hidden)", timeout=20000)
@@ -320,7 +326,7 @@ with sync_playwright() as pw:
     page.click("#btn-stop"); page.wait_for_timeout(300)
 
     print("\n=== P. Фон/возврат (visibilitychange) ===")
-    page.evaluate("localStorage.setItem('breath-settings', JSON.stringify({phaseDuration:4,totalCycles:20,sound:true,haptics:true}))")
+    page.evaluate("localStorage.setItem('breath-settings', JSON.stringify({phaseDuration:4,totalCycles:20,sound:true,sound:true}))")
     page.reload(wait_until="networkidle")
     page.click("#btn-start")
     page.wait_for_timeout(3500)
@@ -367,7 +373,7 @@ with sync_playwright() as pw:
     page.reload(wait_until="networkidle")
     a11y = page.evaluate("""() => {
       const q = s => document.querySelector(s);
-      const rows = ['row-sound','row-haptics'];
+      const rows = ['row-sound'];
       return {
         roleSwitch: rows.every(id => q('#'+id).getAttribute('role') === 'switch'),
         ariaChecked: rows.every(id => ['true','false'].includes(q('#'+id).getAttribute('aria-checked'))),
