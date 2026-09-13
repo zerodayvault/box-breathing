@@ -31,7 +31,7 @@ const state = {
   pauseStart: 0,
   rafId: null,
   audioCtx: null,
-  audioBuffer: null,   // декодированный звук из файла
+  audioBuffer: null,
   lastCount: null,
 };
 
@@ -74,9 +74,7 @@ function renderSettings() {
   $("total-hint").textContent = `Итого ${formatDuration(settings.phaseDuration * 4 * settings.totalCycles)}`;
 }
 
-/* ---------- Звук ----------
-   AudioContext создаётся и разблокируется ТОЛЬКО в момент тапа
-   (user gesture) — иначе Safari блокирует старт. */
+/* ---------- Звук ---------- */
 async function ensureAudio() {
   try {
     if (!state.audioCtx) {
@@ -91,7 +89,7 @@ async function ensureAudio() {
       state.audioBuffer = await state.audioCtx.decodeAudioData(buf);
     }
   } catch (e) {
-    state.audioBuffer = null; // останется fallback-синтез
+    state.audioBuffer = null;
   }
 }
 
@@ -107,7 +105,6 @@ function playSound() {
       src.connect(gain).connect(ctx.destination);
       src.start();
     } else {
-      // fallback: синтезированный сигнал
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "sine";
@@ -126,7 +123,7 @@ function easeInOutSine(t) {
   return -(Math.cos(Math.PI * t) - 1) / 2;
 }
 
-/* ---------- Геометрия: точка и обводка по одному getPointAtLength ---------- */
+/* ---------- Геометрия ---------- */
 const VIEW = 300;
 const trackRect = document.querySelector(".box__track");
 const PERIMETER = trackRect.getTotalLength();
@@ -214,7 +211,6 @@ function start() {
   pauseIcon.innerHTML = ICON_PAUSE;
   renderSession(0, 0, "inhale");
   showScreen("session");
-  // аудио разблокируется этим же тапом
   ensureAudio().then(() => playSound());
   state.phaseStart = performance.now();
   state.rafId = requestAnimationFrame(tick);
@@ -293,7 +289,6 @@ function buildPicker(items, selectedValue) {
   });
   const index = Math.max(0, items.findIndex((i) => i.value === selectedValue));
   picker = { items, index, onDone: null, scrollTimer: null };
-  // scrollTop после layout — иначе Safari/Chromium сбрасывает в 0
   requestAnimationFrame(() => { pickerScroll.scrollTop = index * PICKER_ITEM_H; });
 }
 
@@ -329,45 +324,55 @@ function closePicker(apply) {
   saveSettings();
 }
 
-$("sheet-cancel").addEventListener("click", () => closePicker(false));
-$("sheet-done").addEventListener("click", () => closePicker(true));
-sheetBackdrop.addEventListener("click", () => closePicker(false));
-
-$("row-phase").addEventListener("click", () => {
+function openPhasePicker() {
   const items = [];
   for (let i = 2; i <= 10; i++) items.push({ value: i, label: `${i} сек` });
-  openPicker({
-    title: "Длительность фазы",
-    items,
-    value: settings.phaseDuration,
-    onDone: (v) => { settings.phaseDuration = v; },
-  });
-});
+  openPicker({ title: "Длительность фазы", items, value: settings.phaseDuration, onDone: (v) => { settings.phaseDuration = v; } });
+}
 
-$("row-cycles").addEventListener("click", () => {
+function openCyclesPicker() {
   const items = [];
   for (let i = 1; i <= 20; i++) items.push({ value: i, label: `${i}` });
-  openPicker({
-    title: "Циклы",
-    items,
-    value: settings.totalCycles,
-    onDone: (v) => { settings.totalCycles = v; },
-  });
-});
+  openPicker({ title: "Циклы", items, value: settings.totalCycles, onDone: (v) => { settings.totalCycles = v; } });
+}
 
-$("row-sound").addEventListener("click", () => {
+function toggleSound() {
   settings.sound = !settings.sound;
   saveSettings();
   renderSettings();
   if (settings.sound) ensureAudio().then(() => playSound());
-});
+}
 
-/* ---------- События ---------- */
-$("btn-start").addEventListener("click", start);
-$("btn-pause").addEventListener("click", togglePause);
-$("btn-stop").addEventListener("click", stop);
-$("btn-again").addEventListener("click", start);
-$("btn-settings").addEventListener("click", stop);
+/* ================================================================
+   Единая обработка нажатий: делегирование на document.
+   Работает и по click, и по pointerup (страховка для iOS standalone).
+================================================================ */
+const actions = {
+  "btn-start": start,
+  "btn-again": start,
+  "btn-settings": stop,
+  "btn-pause": togglePause,
+  "btn-stop": stop,
+  "row-phase": openPhasePicker,
+  "row-cycles": openCyclesPicker,
+  "row-sound": toggleSound,
+  "sheet-cancel": () => closePicker(false),
+  "sheet-done": () => closePicker(true),
+};
+
+let lastFire = 0;
+function handleTap(e) {
+  const el = e.target.closest("[id]");
+  if (!el || !actions[el.id]) return;
+  const now = Date.now();
+  if (now - lastFire < 350) return; // антидубль click+pointerup
+  lastFire = now;
+  actions[el.id]();
+}
+
+document.addEventListener("pointerup", handleTap);
+document.addEventListener("click", handleTap);
+sheetBackdrop.addEventListener("click", () => closePicker(false));
 
 /* ---------- Service Worker ---------- */
 if ("serviceWorker" in navigator) {
@@ -377,4 +382,3 @@ if ("serviceWorker" in navigator) {
 }
 
 renderSettings();
-

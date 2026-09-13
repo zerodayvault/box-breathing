@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = "box-breathing-v6";
+﻿const CACHE_NAME = "box-breathing-v7";
 const ASSETS = [
   "./",
   "./index.html",
@@ -32,3 +32,4 @@ self.addEventListener("fetch", (event) => {
     caches.match(event.request).then((cached) => cached || fetch(event.request))
   );
 });
+
