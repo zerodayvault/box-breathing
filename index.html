@@ -5,14 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
 
   <title>Дыхание</title>
-  <meta name="description" content="Таймер квадратного дыхания">
+  <meta name="description" content="Таймер квадратного дыхания 4-4-4-4">
   <meta name="theme-color" content="#000000">
+  <meta name="color-scheme" content="dark">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Дыхание">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
 
@@ -22,97 +23,106 @@
   <main class="app" id="app">
 
     <!-- Экран настройки -->
-    <section class="screen screen--setup" id="screen-setup">
+    <section class="screen screen--setup" id="screen-setup" aria-labelledby="app-title">
       <header class="header">
-        <h1 class="header__title">Дыхание</h1>
+        <h1 class="header__title" id="app-title">Дыхание</h1>
         <p class="header__subtitle">Квадратная техника 4-4-4-4</p>
       </header>
 
       <div class="list">
-        <button class="list__row" id="row-phase">
+        <button class="list__row" id="row-phase" type="button" aria-haspopup="dialog">
           <span class="list__label">Длительность фазы</span>
-          <span class="list__value"><span id="phase-value">4 сек</span><span class="list__chevron">›</span></span>
+          <span class="list__value"><span id="phase-value">4 сек</span><span class="list__chevron" aria-hidden="true">›</span></span>
         </button>
-        <div class="list__sep"></div>
-        <button class="list__row" id="row-cycles">
+        <div class="list__sep" role="presentation"></div>
+        <button class="list__row" id="row-cycles" type="button" aria-haspopup="dialog">
           <span class="list__label">Циклы</span>
-          <span class="list__value"><span id="cycles-value">5</span><span class="list__chevron">›</span></span>
+          <span class="list__value"><span id="cycles-value">5</span><span class="list__chevron" aria-hidden="true">›</span></span>
         </button>
-        <div class="list__sep"></div>
-        <button class="list__row" id="row-sound">
+        <div class="list__sep" role="presentation"></div>
+        <button class="list__row" id="row-sound" type="button" role="switch" aria-checked="true">
           <span class="list__label">Звук</span>
-          <span class="toggle" id="toggle-sound"><span class="toggle__knob"></span></span>
+          <span class="toggle" id="toggle-sound" aria-hidden="true"><span class="toggle__knob"></span></span>
+        </button>
+        <div class="list__sep" role="presentation"></div>
+        <button class="list__row" id="row-haptics" type="button" role="switch" aria-checked="true">
+          <span class="list__label">Вибрация</span>
+          <span class="toggle" id="toggle-haptics" aria-hidden="true"><span class="toggle__knob"></span></span>
         </button>
       </div>
 
-      <p class="hint" id="total-hint">Итого 1 мин 20 сек</p>
+      <p class="hint" id="total-hint" aria-live="polite">Итого 1 мин 20 сек</p>
 
-      <button class="btn-start" id="btn-start">Начать</button>
+      <button class="btn-start" id="btn-start" type="button">Начать</button>
     </section>
 
     <!-- Экран сессии -->
-    <section class="screen screen--session hidden" id="screen-session">
+    <section class="screen screen--session hidden" id="screen-session" aria-label="Сеанс дыхания">
       <div class="session__top">
         <span class="session__cycle" id="cycle-label">Цикл 1 из 5</span>
       </div>
 
       <div class="box-stage">
         <div class="box" id="box">
-          <svg class="box__svg" id="box-svg" viewBox="0 0 300 300" fill="none" aria-hidden="true">
+          <svg class="box__svg" id="box-svg" viewBox="0 0 300 300" fill="none" aria-hidden="true" focusable="false">
             <rect class="box__track" x="14" y="14" width="272" height="272" rx="56" ry="56"/>
             <rect class="box__progress" id="box-progress" x="14" y="14" width="272" height="272" rx="56" ry="56"/>
           </svg>
-          <div class="dot" id="dot"></div>
+          <div class="dot" id="dot" aria-hidden="true"></div>
         </div>
         <div class="session__center">
-          <div class="session__phase" id="phase-label">Вдох</div>
-          <div class="session__count" id="count-label">4</div>
+          <div class="session__phase" id="phase-label" aria-live="polite">Вдох</div>
+          <div class="session__count" id="count-label" aria-hidden="true">4</div>
         </div>
       </div>
 
       <div class="session__controls">
-        <button class="btn-circle" id="btn-stop" aria-label="Закончить">
-          <svg viewBox="0 0 24 24" width="26" height="26"><rect x="6" y="6" width="12" height="12" rx="3" fill="currentColor"/></svg>
+        <button class="btn-circle" id="btn-stop" type="button" aria-label="Закончить и вернуться к настройкам">
+          <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false"><rect x="6" y="6" width="12" height="12" rx="3" fill="currentColor"/></svg>
         </button>
-        <button class="btn-circle btn-circle--accent" id="btn-pause" aria-label="Пауза">
-          <svg viewBox="0 0 24 24" width="26" height="26" id="pause-icon"><rect x="6" y="5" width="4" height="14" rx="1.6" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1.6" fill="currentColor"/></svg>
+        <button class="btn-circle btn-circle--accent" id="btn-pause" type="button" aria-label="Пауза" aria-pressed="false">
+          <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false" id="pause-icon"><rect x="6" y="5" width="4" height="14" rx="1.6" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1.6" fill="currentColor"/></svg>
         </button>
       </div>
     </section>
 
     <!-- Экран завершения -->
-    <section class="screen screen--done hidden" id="screen-done">
+    <section class="screen screen--done hidden" id="screen-done" role="status" aria-live="polite">
       <div class="done__badge">
-        <svg viewBox="0 0 52 52" width="84" height="84" aria-hidden="true">
+        <svg viewBox="0 0 52 52" width="84" height="84" aria-hidden="true" focusable="false">
           <circle class="done__badge-circle" cx="26" cy="26" r="24" fill="none"/>
           <path class="done__badge-check" fill="none" d="M14 27l8 8 16-17"/>
         </svg>
       </div>
       <h2 class="done__title">Готово</h2>
       <p class="done__text" id="done-text">5 циклов · 1 мин 20 сек</p>
-      <button class="btn-start" id="btn-again">Ещё раз</button>
-      <button class="btn-text" id="btn-settings">Изменить настройки</button>
+      <button class="btn-start" id="btn-again" type="button">Ещё раз</button>
+      <button class="btn-text" id="btn-settings" type="button">Изменить настройки</button>
     </section>
 
   </main>
 
   <!-- Picker sheet -->
-  <div class="sheet-backdrop hidden" id="sheet-backdrop"></div>
-  <div class="sheet hidden" id="sheet">
-    <div class="sheet__grabber"></div>
+  <div class="sheet-backdrop hidden" id="sheet-backdrop" aria-hidden="true"></div>
+  <div class="sheet hidden" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" aria-hidden="true" tabindex="-1">
+    <div class="sheet__grabber" aria-hidden="true"></div>
     <div class="sheet__nav">
-      <button class="sheet__nav-btn" id="sheet-cancel">Отмена</button>
+      <button class="sheet__nav-btn" id="sheet-cancel" type="button">Отмена</button>
       <span class="sheet__nav-title" id="sheet-title">Длительность фазы</span>
-      <button class="sheet__nav-btn sheet__nav-btn--bold" id="sheet-done">Готово</button>
+      <button class="sheet__nav-btn sheet__nav-btn--bold" id="sheet-done" type="button">Готово</button>
     </div>
     <div class="picker" id="picker">
-      <div class="picker__highlight"></div>
+      <div class="picker__highlight" aria-hidden="true"></div>
       <div class="picker__scroll" id="picker-scroll">
-        <div class="picker__spacer"></div>
-        <div class="picker__spacer"></div>
+        <div class="picker__spacer" aria-hidden="true"></div>
+        <div class="picker__spacer" aria-hidden="true"></div>
       </div>
     </div>
   </div>
+
+  <noscript>
+    <p class="noscript">Для работы таймера дыхания нужно включить JavaScript.</p>
+  </noscript>
 
   <script src="app.js"></script>
 </body>

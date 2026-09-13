@@ -1,13 +1,21 @@
-﻿{
+{
+  "id": "./index.html",
   "name": "Квадратное дыхание",
   "short_name": "Дыхание",
   "description": "Таймер квадратного дыхания 4-4-4-4",
+  "lang": "ru",
+  "dir": "ltr",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0e1116",
-  "theme_color": "#0e1116",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "categories": [
+    "health",
+    "lifestyle",
+    "utilities"
+  ],
   "icons": [
     {
       "src": "icons/icon-192.png",

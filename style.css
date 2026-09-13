@@ -32,6 +32,7 @@ body {
 }
 
 .app {
+  height: 100vh;
   height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -42,12 +43,37 @@ body {
 
 .screen {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
 .hidden { display: none !important; }
+
+/* ---------- Фокус для клавиатуры ---------- */
+:focus { outline: none; }
+
+button:focus-visible,
+.sheet:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 14px;
+}
+
+.btn-circle:focus-visible { border-radius: 50%; }
+.sheet:focus-visible { outline-offset: -3px; border-radius: 20px; }
+
+.noscript {
+  position: fixed;
+  inset: auto 20px calc(var(--safe-bottom) + 24px);
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--grouped-bg);
+  color: var(--label);
+  font-size: 15px;
+  text-align: center;
+}
 
 /* ---------- Header (staggered entrance) ---------- */
 .screen--setup .header {
@@ -104,6 +130,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   width: 100%;
   min-height: 48px;
   padding: 8px 16px;
@@ -133,6 +160,7 @@ body {
   gap: 7px;
   font-variant-numeric: tabular-nums;
   transition: color 0.2s ease;
+  flex-shrink: 0;
 }
 
 .list__value.pulse { animation: valuePulse 0.3s ease; }
@@ -247,9 +275,11 @@ body {
   position: relative;
 }
 
+/* padding-top уже задан у .app вместе с safe-area, поэтому здесь
+   смещаемся только относительно контейнера — иначе двойной отступ. */
 .session__top {
   position: absolute;
-  top: calc(var(--safe-top) + 4px);
+  top: -4px;
   left: 0;
   right: 0;
   text-align: center;
@@ -262,6 +292,7 @@ body {
   font-size: 15px;
   letter-spacing: -0.2px;
   font-variant-numeric: tabular-nums;
+  transition: opacity 0.25s ease;
 }
 
 .box-stage {
@@ -280,6 +311,7 @@ body {
   position: absolute;
   inset: 0;
   will-change: transform;
+  transition: opacity 0.3s ease;
 }
 
 .box__svg {
@@ -298,6 +330,7 @@ body {
   stroke: var(--accent);
   stroke-width: 3;
   stroke-linecap: round;
+  transition: stroke 0.3s ease;
 }
 
 .dot {
@@ -309,9 +342,11 @@ body {
   box-shadow: 0 0 14px rgba(100, 210, 255, 0.7);
   top: 0;
   left: 0;
+  /* позиция задаётся из JS через translate3d — без перерасчёта макета */
   transform: translate(-50%, -50%);
-  will-change: top, left;
+  will-change: transform;
   pointer-events: none;
+  transition: opacity 0.3s ease;
 }
 
 /* мягкая пульсация свечения точки */
@@ -338,6 +373,7 @@ body {
   justify-content: center;
   gap: 2px;
   pointer-events: none;
+  transition: opacity 0.3s ease;
 }
 
 .session__phase {
@@ -382,6 +418,12 @@ body {
   80%  { transform: scale(1);   opacity: 1; }
   100% { transform: scale(0.9); opacity: 0.4; }
 }
+
+/* пауза: гасим визуал, чтобы было понятно, что таймер стоит */
+.screen--session.is-paused .box,
+.screen--session.is-paused .dot,
+.screen--session.is-paused .session__center,
+.screen--session.is-paused .session__cycle { opacity: 0.4; }
 
 .session__controls {
   display: flex;
@@ -517,6 +559,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 10px 16px 6px;
 }
 
@@ -524,6 +567,7 @@ body {
   font-size: 15px;
   font-weight: 600;
   color: var(--label-2);
+  text-align: center;
 }
 
 .sheet__nav-btn {
@@ -533,12 +577,14 @@ body {
   font-family: inherit;
   font-size: 17px;
   padding: 6px 4px;
+  min-width: 76px;
   cursor: pointer;
   transition: opacity 0.15s ease, transform 0.12s var(--spring);
 }
 
 .sheet__nav-btn:active { opacity: 0.5; transform: scale(0.95); }
-.sheet__nav-btn--bold { font-weight: 600; }
+.sheet__nav-btn--bold { font-weight: 600; text-align: right; }
+#sheet-cancel { text-align: left; }
 
 .picker {
   position: relative;
@@ -582,11 +628,17 @@ body {
   justify-content: center;
   font-size: 21px;
   letter-spacing: -0.4px;
-  color: var(--label);
+  color: var(--label-2);
   font-variant-numeric: tabular-nums;
   scroll-snap-align: center;
   scroll-snap-stop: always;
-  transition: transform 0.15s ease, opacity 0.15s ease;
+  cursor: pointer;
+  transition: color 0.18s ease, transform 0.18s ease;
+}
+
+.picker__item.is-active {
+  color: var(--label);
+  transform: scale(1.08);
 }
 
 @media (max-height: 700px) {
@@ -596,6 +648,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
   .done__badge-circle, .done__badge-check { stroke-dashoffset: 0; }
 }
