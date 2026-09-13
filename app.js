@@ -1,4 +1,4 @@
-﻿/* ===== Дыхание — логика таймера + iOS-пикер ===== */
+﻿/* ===== Дыхание — таймер + нативный scroll-snap пикер + свой звук ===== */
 
 const PHASES = [
   { key: "inhale", label: "Вдох"  },
@@ -10,8 +10,8 @@ const PHASES = [
 const SCALE_MIN = 0.93;
 const SCALE_MAX = 1.04;
 
-/* ---------- Настройки (сохраняются) ---------- */
-const defaults = { phaseDuration: 4, totalCycles: 5, sound: true, haptics: true };
+/* ---------- Настройки (localStorage) ---------- */
+const defaults = { phaseDuration: 4, totalCycles: 5, sound: true };
 let settings = { ...defaults };
 try {
   Object.assign(settings, JSON.parse(localStorage.getItem("breath-settings") || "{}"));
@@ -19,6 +19,54 @@ try {
 
 function saveSettings() {
   try { localStorage.setItem("breath-settings", JSON.stringify(settings)); } catch (e) {}
+}
+
+/* ---------- Свой звук (IndexedDB) ---------- */
+const DB_NAME = "breath-db";
+const DB_STORE = "audio";
+let customSoundBuffer = null;   // AudioBuffer
+let customSoundName = null;
+
+function dbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(DB_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbSaveSound(blob, name) {
+  const db = await dbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).put({ blob, name }, "custom");
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function dbLoadSound() {
+  try {
+    const db = await dbOpen();
+    return await new Promise((resolve) => {
+      const req = db.transaction(DB_STORE, "readonly").objectStore(DB_STORE).get("custom");
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch (e) { return null; }
+}
+
+async function dbDeleteSound() {
+  try {
+    const db = await dbOpen();
+    return await new Promise((resolve) => {
+      const tx = db.transaction(DB_STORE, "readwrite");
+      tx.objectStore(DB_STORE).delete("custom");
+      tx.oncomplete = resolve;
+      tx.onerror = resolve;
+    });
+  } catch (e) {}
 }
 
 const state = {
@@ -69,20 +117,34 @@ function showScreen(name) {
 function renderSettings() {
   $("phase-value").textContent = `${settings.phaseDuration} сек`;
   $("cycles-value").textContent = `${settings.totalCycles}`;
-  $("sound-value").textContent = settings.sound ? "Вкл" : "Выкл";
-  $("haptics-value").textContent = settings.haptics ? "Вкл" : "Выкл";
+  $("toggle-sound").classList.toggle("on", settings.sound);
+  $("sound-file-value").textContent = customSoundName || "Стандартный";
   $("total-hint").textContent = `Итого ${formatDuration(settings.phaseDuration * 4 * settings.totalCycles)}`;
 }
 
 /* ---------- Звук ---------- */
+function getAudioCtx() {
+  if (!state.audioCtx) {
+    state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (state.audioCtx.state === "suspended") state.audioCtx.resume();
+  return state.audioCtx;
+}
+
 function beep(freq = 660, duration = 0.12) {
   if (!settings.sound) return;
   try {
-    if (!state.audioCtx) {
-      state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getAudioCtx();
+    if (customSoundBuffer) {
+      const src = ctx.createBufferSource();
+      const gain = ctx.createGain();
+      src.buffer = customSoundBuffer;
+      gain.gain.setValueAtTime(0.5, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + Math.min(customSoundBuffer.duration, 1.2));
+      src.connect(gain).connect(ctx.destination);
+      src.start();
+      return;
     }
-    const ctx = state.audioCtx;
-    if (ctx.state === "suspended") ctx.resume();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "sine";
@@ -95,59 +157,25 @@ function beep(freq = 660, duration = 0.12) {
   } catch (e) {}
 }
 
-function buzz(pattern = 12) {
-  if (settings.haptics && navigator.vibrate) navigator.vibrate(pattern);
-}
-
 /* ---------- Easing ---------- */
 function easeInOutSine(t) {
   return -(Math.cos(Math.PI * t) - 1) / 2;
 }
 
-/* ---------- Геометрия скруглённого квадрата ---------- */
+/* ---------- Геометрия квадрата: 100% синхронизация ----------
+   Точка позиционируется через getPointAtLength() того же самого
+   rect, что и обводка — расхождение невозможно. */
 const VIEW = 300;
-const INSET = 14;
-const SIDE = VIEW - INSET * 2;
-const RADIUS = 56;
-const STRAIGHT = SIDE - RADIUS * 2;
-const ARC = (Math.PI / 2) * RADIUS;
-const PERIMETER = STRAIGHT * 4 + ARC * 4;
-
-// Точка на периметре, старт — верхний левый угол, по часовой стрелке.
-function pointAt(d) {
-  d = ((d % PERIMETER) + PERIMETER) % PERIMETER;
-  const segs = [
-    { len: ARC,      f: (t) => { const a = Math.PI + (Math.PI / 2) * t;       return { x: INSET + RADIUS + RADIUS * Math.cos(a),           y: INSET + RADIUS + RADIUS * Math.sin(a) }; } },
-    { len: STRAIGHT, f: (t) => ({ x: INSET + RADIUS + STRAIGHT * t,           y: INSET }) },
-    { len: ARC,      f: (t) => { const a = -Math.PI / 2 + (Math.PI / 2) * t;  return { x: VIEW - INSET - RADIUS + RADIUS * Math.cos(a),    y: INSET + RADIUS + RADIUS * Math.sin(a) }; } },
-    { len: STRAIGHT, f: (t) => ({ x: VIEW - INSET,                            y: INSET + RADIUS + STRAIGHT * t }) },
-    { len: ARC,      f: (t) => { const a = (Math.PI / 2) * t;                 return { x: VIEW - INSET - RADIUS + RADIUS * Math.cos(a),    y: VIEW - INSET - RADIUS + RADIUS * Math.sin(a) }; } },
-    { len: STRAIGHT, f: (t) => ({ x: VIEW - INSET - RADIUS - STRAIGHT * t,    y: VIEW - INSET }) },
-    { len: ARC,      f: (t) => { const a = Math.PI / 2 + (Math.PI / 2) * t;   return { x: INSET + RADIUS + RADIUS * Math.cos(a),           y: VIEW - INSET - RADIUS + RADIUS * Math.sin(a) }; } },
-    { len: STRAIGHT, f: (t) => ({ x: INSET,                                   y: VIEW - INSET - RADIUS - STRAIGHT * t }) },
-  ];
-  for (const s of segs) {
-    if (d <= s.len) return s.f(d / s.len);
-    d -= s.len;
-  }
-  return segs[0].f(0);
-}
-
-// SVG rect path стартует в точке (x, y+ry) = начало левой стороны,
-// а SVG повёрнут на -90deg, поэтому визуально штрих стартует в нижнем
-// левом углу. Сдвигаем dashoffset так, чтобы видимый старт совпадал
-// с точкой (верхний левый угол, по часовой).
-const DASH_ZERO = 0; // длина от начала path до верхнего левого угла по path
+const trackRect = document.querySelector(".box__track");
+const PERIMETER = trackRect.getTotalLength();
 
 boxProgress.style.strokeDasharray = `${PERIMETER}`;
 
 function renderSession(overallProgress, phaseProgress, phaseKey) {
   const len = overallProgress * PERIMETER;
-  // штрих длины len, заканчивающийся на позиции (DASH_ZERO + len) по path:
-  // видимая часть = [DASH_ZERO, DASH_ZERO+len]
-  boxProgress.style.strokeDashoffset = `${PERIMETER - len - DASH_ZERO}`;
+  boxProgress.style.strokeDashoffset = `${PERIMETER - len}`;
 
-  const pt = pointAt(len);
+  const pt = trackRect.getPointAtLength(len);
   dot.style.left = (pt.x / VIEW * 100) + "%";
   dot.style.top = (pt.y / VIEW * 100) + "%";
 
@@ -206,7 +234,6 @@ function nextPhase(now) {
   animatePhaseSwap();
   state.phaseStart = now;
   beep(state.phaseIndex === 0 ? 880 : 660);
-  buzz(10);
 }
 
 /* ---------- Управление ---------- */
@@ -226,7 +253,6 @@ function start() {
   renderSession(0, 0, "inhale");
   showScreen("session");
   beep(880);
-  buzz(20);
   state.phaseStart = performance.now();
   state.rafId = requestAnimationFrame(tick);
   requestWakeLock();
@@ -245,7 +271,6 @@ function togglePause() {
     state.pauseStart = performance.now();
     cancelAnimationFrame(state.rafId);
   }
-  buzz(10);
 }
 
 function stop() {
@@ -266,7 +291,6 @@ function finish() {
     `${settings.totalCycles} ${plural(settings.totalCycles, "цикл", "цикла", "циклов")} · ${formatDuration(totalSec)}`;
   beep(880, 0.2);
   setTimeout(() => beep(1100, 0.25), 250);
-  buzz([30, 60, 30]);
   showScreen("done");
 }
 
@@ -285,70 +309,57 @@ document.addEventListener("visibilitychange", () => {
 });
 
 /* ================================================================
-   iOS-style wheel picker (как в «Часах»)
+   Пикер: нативный scroll с CSS scroll-snap (инерция и rubber-band —
+   настоящие, от браузера). На iOS ощущается как UIPickerView.
 ================================================================ */
 const PICKER_ITEM_H = 36;
-const PICKER_CENTER = 108; // половина высоты .picker (216)
+const PICKER_SPACER_H = 90;
 
 const sheet = $("sheet");
 const sheetBackdrop = $("sheet-backdrop");
-const wheel = $("picker-wheel");
+const pickerScroll = $("picker-scroll");
 
-let picker = null;
+let picker = null; // { items, index, onDone, scrollTimer }
 
-function buildWheel(items, selectedValue) {
-  wheel.innerHTML = "";
+function buildPicker(items, selectedValue) {
+  // очистить, оставив спейсеры
+  pickerScroll.querySelectorAll(".picker__item").forEach((el) => el.remove());
+  const spacerEnd = pickerScroll.querySelectorAll(".picker__spacer")[1];
   items.forEach((it) => {
     const div = document.createElement("div");
     div.className = "picker__item";
     div.textContent = it.label;
-    wheel.appendChild(div);
+    pickerScroll.insertBefore(div, spacerEnd);
   });
   const index = Math.max(0, items.findIndex((i) => i.value === selectedValue));
-  picker = {
-    items, index,
-    offset: 0, startOffset: 0, startY: 0,
-    dragging: false, lastY: 0, lastT: 0, velocity: 0, animId: null,
-  };
-  setPickerOffset(offsetForIndex(index), false);
+  picker = { items, index, onDone: null, scrollTimer: null, lastIndex: index };
+  pickerScroll.scrollTop = index * PICKER_ITEM_H;
 }
 
-function minOffset() { return -(picker.items.length - 1) * PICKER_ITEM_H; }
-function offsetForIndex(i) { return -i * PICKER_ITEM_H; }
-function indexForOffset(o) {
-  return Math.min(picker.items.length - 1, Math.max(0, Math.round(-o / PICKER_ITEM_H)));
+function pickerIndexFromScroll() {
+  return Math.min(picker.items.length - 1, Math.max(0, Math.round(pickerScroll.scrollTop / PICKER_ITEM_H)));
 }
 
-function applyOffset(o) {
-  picker.offset = o;
-  wheel.style.transform = `translateY(${PICKER_CENTER - PICKER_ITEM_H / 2 + o}px)`;
-}
-
-function setPickerOffset(offset, animate = true) {
-  cancelAnimationFrame(picker.animId);
-  if (!animate) { applyOffset(offset); return; }
-  const from = picker.offset, to = offset, t0 = performance.now(), dur = 220;
-  const step = (t) => {
-    const k = Math.min((t - t0) / dur, 1);
-    const e = 1 - Math.pow(1 - k, 3);
-    applyOffset(from + (to - from) * e);
-    if (k < 1) picker.animId = requestAnimationFrame(step);
-  };
-  picker.animId = requestAnimationFrame(step);
-}
-
-function settlePicker() {
-  const idx = indexForOffset(picker.offset);
-  setPickerOffset(offsetForIndex(idx), true);
-  if (idx !== picker.index) {
+pickerScroll.addEventListener("scroll", () => {
+  if (!picker) return;
+  const idx = pickerIndexFromScroll();
+  if (idx !== picker.lastIndex) {
+    picker.lastIndex = idx;
     picker.index = idx;
-    buzz(6);
   }
-}
+  clearTimeout(picker.scrollTimer);
+  picker.scrollTimer = setTimeout(() => {
+    // доводка до ближайшего элемента после остановки
+    const target = pickerIndexFromScroll() * PICKER_ITEM_H;
+    if (Math.abs(pickerScroll.scrollTop - target) > 1) {
+      pickerScroll.scrollTo({ top: target, behavior: "smooth" });
+    }
+  }, 90);
+}, { passive: true });
 
 function openPicker({ title, items, value, onDone }) {
   $("sheet-title").textContent = title;
-  buildWheel(items, value);
+  buildPicker(items, value);
   picker.onDone = onDone;
   sheet.classList.remove("hidden");
   sheetBackdrop.classList.remove("hidden");
@@ -361,51 +372,6 @@ function closePicker(apply) {
   renderSettings();
   saveSettings();
 }
-
-function onDragStart(y) {
-  if (!picker) return;
-  cancelAnimationFrame(picker.animId);
-  picker.dragging = true;
-  picker.startY = y;
-  picker.startOffset = picker.offset;
-  picker.lastY = y;
-  picker.lastT = performance.now();
-  picker.velocity = 0;
-}
-
-function onDragMove(y) {
-  if (!picker || !picker.dragging) return;
-  const now = performance.now();
-  const dt = now - picker.lastT;
-  if (dt > 0) picker.velocity = (y - picker.lastY) / dt;
-  picker.lastY = y;
-  picker.lastT = now;
-  let o = picker.startOffset + (y - picker.startY);
-  if (o > 0) o *= 0.35;                       // резиновый верхний край
-  if (o < minOffset()) o = minOffset() + (o - minOffset()) * 0.35;
-  applyOffset(o);
-}
-
-function onDragEnd() {
-  if (!picker || !picker.dragging) return;
-  picker.dragging = false;
-  let o = picker.offset + picker.velocity * 160; // инерция
-  o = Math.max(minOffset(), Math.min(0, o));
-  picker.offset = o;
-  settlePicker();
-}
-
-sheet.addEventListener("touchstart", (e) => { e.preventDefault(); onDragStart(e.touches[0].clientY); }, { passive: false });
-sheet.addEventListener("touchmove",  (e) => { e.preventDefault(); onDragMove(e.touches[0].clientY); }, { passive: false });
-sheet.addEventListener("touchend",   () => onDragEnd());
-sheet.addEventListener("mousedown",  (e) => {
-  e.preventDefault();
-  onDragStart(e.clientY);
-  const mv = (ev) => onDragMove(ev.clientY);
-  const up = () => { onDragEnd(); window.removeEventListener("mousemove", mv); window.removeEventListener("mouseup", up); };
-  window.addEventListener("mousemove", mv);
-  window.addEventListener("mouseup", up);
-});
 
 $("sheet-cancel").addEventListener("click", () => closePicker(false));
 $("sheet-done").addEventListener("click", () => closePicker(true));
@@ -433,20 +399,83 @@ $("row-cycles").addEventListener("click", () => {
   });
 });
 
-function toggleRow(key) {
-  settings[key] = !settings[key];
+/* ---------- Звук: тумблер + загрузка своего ---------- */
+$("row-sound").addEventListener("click", () => {
+  settings.sound = !settings.sound;
   saveSettings();
   renderSettings();
-  buzz(8);
+  if (settings.sound) beep(660, 0.1); // сразу проверить
+});
+
+const soundInput = $("sound-input");
+$("row-sound-file").addEventListener("click", () => {
+  if (customSoundName) {
+    // долгое нажатие не нужно — простое меню: тап = заменить, двойной смысл через confirm
+    const replace = confirm("Заменить звук? (Отмена — вернуть стандартный)");
+    if (replace) soundInput.click();
+    else {
+      customSoundBuffer = null;
+      customSoundName = null;
+      dbDeleteSound();
+      renderSettings();
+    }
+  } else {
+    soundInput.click();
+  }
+});
+
+soundInput.addEventListener("change", async () => {
+  const file = soundInput.files && soundInput.files[0];
+  if (!file) return;
+  try {
+    const ctx = getAudioCtx();
+    const buf = await file.arrayBuffer();
+    customSoundBuffer = await ctx.decodeAudioData(buf);
+    customSoundName = file.name.replace(/\.[^.]+$/, "");
+    if (customSoundName.length > 18) customSoundName = customSoundName.slice(0, 17) + "…";
+    await dbSaveSound(file, customSoundName);
+    beep(); // предпрослушка
+  } catch (e) {
+    alert("Не удалось прочитать аудиофайл");
+  }
+  soundInput.value = "";
+  renderSettings();
+});
+
+// восстановить сохранённый звук
+(async () => {
+  const saved = await dbLoadSound();
+  if (saved && saved.blob) {
+    try {
+      const ctx = getAudioCtxSafe();
+      if (ctx) {
+        const buf = await saved.blob.arrayBuffer();
+        // декодируем лениво при первом старте — AudioContext может быть заблокирован до жеста
+        pendingSoundBuf = buf;
+        customSoundName = saved.name;
+      }
+    } catch (e) {}
+  }
+  renderSettings();
+})();
+
+let pendingSoundBuf = null;
+function getAudioCtxSafe() {
+  try { return getAudioCtx(); } catch (e) { return null; }
 }
-$("row-sound").addEventListener("click", () => toggleRow("sound"));
-$("row-haptics").addEventListener("click", () => toggleRow("haptics"));
+async function decodePending() {
+  if (pendingSoundBuf && !customSoundBuffer) {
+    try {
+      customSoundBuffer = await getAudioCtx().decodeAudioData(pendingSoundBuf.slice(0));
+    } catch (e) {}
+  }
+}
 
 /* ---------- События ---------- */
-$("btn-start").addEventListener("click", start);
+$("btn-start").addEventListener("click", () => { decodePending(); start(); });
 $("btn-pause").addEventListener("click", togglePause);
 $("btn-stop").addEventListener("click", stop);
-$("btn-again").addEventListener("click", start);
+$("btn-again").addEventListener("click", () => { decodePending(); start(); });
 $("btn-settings").addEventListener("click", stop);
 
 /* ---------- Service Worker ---------- */
@@ -457,5 +486,3 @@ if ("serviceWorker" in navigator) {
 }
 
 renderSettings();
-
-

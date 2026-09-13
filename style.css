@@ -1,14 +1,12 @@
 ﻿:root {
-  /* iOS system colors (dark) */
   --bg: #000000;
   --grouped-bg: #1c1c1e;
   --separator: rgba(84, 84, 88, 0.65);
   --label: #ffffff;
   --label-2: rgba(235, 235, 245, 0.6);
-  --accent: #64d2ff;           /* iOS systemTeal/blue light */
+  --accent: #64d2ff;
   --accent-fill: rgba(100, 210, 255, 0.16);
   --green: #30d158;
-  --gray-3: #48484a;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -84,12 +82,15 @@ body {
   overflow: hidden;
 }
 
+.list--spaced { margin-top: 20px; }
+
 .list__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 13px 16px;
+  min-height: 48px;
+  padding: 8px 16px;
   background: none;
   border: none;
   color: var(--label);
@@ -115,6 +116,10 @@ body {
   align-items: center;
   gap: 7px;
   font-variant-numeric: tabular-nums;
+  max-width: 55%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .list__chevron {
@@ -123,6 +128,32 @@ body {
   font-weight: 600;
   margin-top: -1px;
 }
+
+/* ---------- iOS toggle ---------- */
+.toggle {
+  width: 51px;
+  height: 31px;
+  border-radius: 16px;
+  background: rgba(120, 120, 128, 0.32);
+  position: relative;
+  transition: background 0.25s ease;
+  flex-shrink: 0;
+}
+
+.toggle__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.15);
+  transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.toggle.on { background: var(--green); }
+.toggle.on .toggle__knob { transform: translateX(20px); }
 
 .hint {
   margin-top: 14px;
@@ -165,10 +196,7 @@ body {
 .btn-text:active { opacity: 0.5; }
 
 /* ---------- Session ---------- */
-.screen--session {
-  justify-content: center;
-  gap: 0;
-}
+.screen--session { justify-content: center; gap: 0; }
 
 .session__top {
   position: absolute;
@@ -202,7 +230,6 @@ body {
   inset: 0;
   width: 100%;
   height: 100%;
-  
 }
 
 .box__track {
@@ -227,6 +254,7 @@ body {
   left: 0;
   transform: translate(-50%, -50%);
   will-change: top, left;
+  pointer-events: none;
 }
 
 .session__center {
@@ -263,9 +291,7 @@ body {
   line-height: 1.1;
 }
 
-.session__count.tick {
-  animation: countTick 0.3s ease;
-}
+.session__count.tick { animation: countTick 0.3s ease; }
 
 @keyframes countTick {
   0%   { transform: scale(1.06); opacity: 0.6; }
@@ -303,7 +329,6 @@ body {
 .screen--done { justify-content: center; gap: 10px; }
 
 .done__badge { margin-bottom: 8px; }
-
 .done__badge svg { display: block; }
 
 .done__badge-circle {
@@ -341,7 +366,7 @@ body {
 
 .screen--done .btn-start { margin-top: 30px; }
 
-/* ---------- Picker sheet ---------- */
+/* ---------- Picker sheet (нативный scroll-snap) ---------- */
 .sheet-backdrop {
   position: fixed;
   inset: 0;
@@ -408,10 +433,10 @@ body {
 
 .picker {
   position: relative;
-  height: 216px; /* 7 строк по 36 */
+  height: 216px;
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 28%, #000 72%, transparent);
-  mask-image: linear-gradient(to bottom, transparent, #000 28%, #000 72%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent);
 }
 
 .picker__highlight {
@@ -424,15 +449,22 @@ body {
   background: rgba(255, 255, 255, 0.09);
   border-radius: 9px;
   pointer-events: none;
+  z-index: 1;
 }
 
-.picker__wheel {
+.picker__scroll {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  will-change: transform;
+  inset: 0;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  overscroll-behavior: contain;
 }
+
+.picker__scroll::-webkit-scrollbar { display: none; }
+
+.picker__spacer { height: 90px; } /* (216-36)/2 */
 
 .picker__item {
   height: 36px;
@@ -443,6 +475,8 @@ body {
   letter-spacing: -0.4px;
   color: var(--label);
   font-variant-numeric: tabular-nums;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
 }
 
 /* iPhone 14 and similar heights */
@@ -457,5 +491,5 @@ body {
   .session__phase.swap, .session__count.tick,
   .sheet, .sheet-backdrop { animation: none; }
   .done__badge-circle, .done__badge-check { stroke-dashoffset: 0; }
+  .picker__scroll { scroll-snap-type: none; }
 }
-

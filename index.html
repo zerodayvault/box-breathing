@@ -39,15 +39,17 @@
           <span class="list__label">Циклы</span>
           <span class="list__value"><span id="cycles-value">5</span><span class="list__chevron">›</span></span>
         </button>
-        <div class="list__sep"></div>
+      </div>
+
+      <div class="list list--spaced">
         <button class="list__row" id="row-sound">
           <span class="list__label">Звук</span>
-          <span class="list__value"><span id="sound-value">Вкл</span><span class="list__chevron">›</span></span>
+          <span class="toggle" id="toggle-sound"><span class="toggle__knob"></span></span>
         </button>
         <div class="list__sep"></div>
-        <button class="list__row" id="row-haptics">
-          <span class="list__label">Вибрация</span>
-          <span class="list__value"><span id="haptics-value">Вкл</span><span class="list__chevron">›</span></span>
+        <button class="list__row" id="row-sound-file">
+          <span class="list__label">Свой звук</span>
+          <span class="list__value"><span id="sound-file-value">Стандартный</span><span class="list__chevron">›</span></span>
         </button>
       </div>
 
@@ -102,7 +104,7 @@
 
   </main>
 
-  <!-- Picker sheet -->
+  <!-- Picker sheet (нативный scroll-snap) -->
   <div class="sheet-backdrop hidden" id="sheet-backdrop"></div>
   <div class="sheet hidden" id="sheet">
     <div class="sheet__grabber"></div>
@@ -113,9 +115,16 @@
     </div>
     <div class="picker" id="picker">
       <div class="picker__highlight"></div>
-      <div class="picker__wheel" id="picker-wheel"></div>
+      <div class="picker__scroll" id="picker-scroll">
+        <div class="picker__spacer"></div>
+        <!-- items -->
+        <div class="picker__spacer"></div>
+      </div>
     </div>
   </div>
+
+  <!-- Скрытый input для загрузки звука -->
+  <input type="file" id="sound-input" accept="audio/*" class="hidden">
 
   <script src="app.js"></script>
 </body>
