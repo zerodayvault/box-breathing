@@ -10,6 +10,7 @@ const PHASES = [
 const SCALE_MIN = 0.93;
 const SCALE_MAX = 1.04;
 const SOUND_URL = "sounds/phase.wav";
+const COUNTDOWN_SEC = 3;
 
 /* ---------- Настройки ---------- */
 const defaults = { phaseDuration: 4, totalCycles: 5, sound: true };
@@ -33,6 +34,8 @@ const state = {
   audioCtx: null,
   audioBuffer: null,
   lastCount: null,
+  countdownLeft: 0,   // >0 = идёт отсчёт перед стартом
+  countdownTimer: null,
 };
 
 /* ---------- DOM ---------- */
@@ -65,6 +68,12 @@ function formatDuration(totalSec) {
 function showScreen(name) {
   Object.values(screens).forEach((s) => s.classList.add("hidden"));
   screens[name].classList.remove("hidden");
+}
+
+function pulseValue(el) {
+  el.classList.remove("pulse");
+  void el.offsetWidth;
+  el.classList.add("pulse");
 }
 
 function renderSettings() {
@@ -123,11 +132,9 @@ function easeInOutSine(t) {
   return -(Math.cos(Math.PI * t) - 1) / 2;
 }
 
-/* ---------- Геометрия ----------
-   ВАЖНО: getTotalLength/getPointAtLength на скрытом SVG в Safari бросает
-   исключение или возвращает мусор — инициализируем лениво при первом старте. */
+/* ---------- Геометрия ---------- */
 const VIEW = 300;
-let geo = null; // { perimeter }
+let geo = null;
 
 function initGeometry() {
   if (geo) return geo;
@@ -137,7 +144,6 @@ function initGeometry() {
     boxProgress.style.strokeDasharray = `${perimeter}`;
     geo = { perimeter };
   } catch (e) {
-    // fallback: теоретический периметр скруглённого квадрата
     const side = 272, r = 56;
     const perimeter = (side - 2 * r) * 4 + (Math.PI / 2) * r * 4;
     boxProgress.style.strokeDasharray = `${perimeter}`;
@@ -156,7 +162,6 @@ function renderSession(overallProgress, phaseProgress, phaseKey) {
     dot.style.left = (pt.x / VIEW * 100) + "%";
     dot.style.top = (pt.y / VIEW * 100) + "%";
   } catch (e) {
-    // fallback: прямоугольная траектория без дуг
     const p = ((overallProgress % 1) + 1) % 1;
     let x, y;
     if (p < 0.25)      { x = p / 0.25;             y = 0; }
@@ -179,19 +184,66 @@ function renderSession(overallProgress, phaseProgress, phaseKey) {
 }
 
 /* ---------- Анимации текста ---------- */
-function animateCount(n) {
+function animateCount(n, className = "tick") {
   if (n === state.lastCount) return;
   state.lastCount = n;
   countLabel.textContent = n;
-  countLabel.classList.remove("tick");
+  countLabel.classList.remove("tick", "countdown");
   void countLabel.offsetWidth;
-  countLabel.classList.add("tick");
+  countLabel.classList.add(className);
 }
 
 function animatePhaseSwap() {
   phaseLabel.classList.remove("swap");
   void phaseLabel.offsetWidth;
   phaseLabel.classList.add("swap");
+}
+
+/* ---------- Обратный отсчёт перед стартом ---------- */
+function startCountdown() {
+  state.countdownLeft = COUNTDOWN_SEC;
+  state.paused = false;
+  phaseLabel.textContent = "Приготовьтесь";
+  animatePhaseSwap();
+  countLabel.classList.remove("tick");
+  countLabel.classList.add("countdown");
+  countLabel.textContent = state.countdownLeft;
+  playCountdownTick(false);
+  clearInterval(state.countdownTimer);
+  state.countdownTimer = setInterval(countdownStep, 1000);
+}
+
+function playCountdownTick(last) {
+  // короткий тик; на "старт" — высокий
+  if (!settings.sound || !state.audioCtx) return;
+  try {
+    const ctx = state.audioCtx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = last ? 880 : 440;
+    gain.gain.setValueAtTime(0.05, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.08);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.08);
+  } catch (e) {}
+}
+
+/* ---------- Сессия ---------- */
+function beginSession() {
+  state.running = true;
+  state.paused = false;
+  state.phaseIndex = 0;
+  state.lastCount = null;
+  phaseLabel.textContent = PHASES[0].label;
+  animatePhaseSwap();
+  countLabel.classList.remove("countdown");
+  countLabel.textContent = settings.phaseDuration;
+  renderSession(0, 0, "inhale");
+  playCountdownTick(true);
+  state.phaseStart = performance.now();
+  state.rafId = requestAnimationFrame(tick);
 }
 
 /* ---------- Цикл таймера ---------- */
@@ -229,26 +281,35 @@ const ICON_PAUSE = '<rect x="6" y="5" width="4" height="14" rx="1.6" fill="curre
 const ICON_PLAY  = '<path d="M8 5.5v13c0 1.2 1.3 1.9 2.3 1.3l10-6.5c0.9-0.6 0.9-2 0-2.6l-10-6.5C9.3 3.6 8 4.3 8 5.5z" fill="currentColor"/>';
 
 function start() {
-  state.running = true;
-  state.paused = false;
   state.cycle = 1;
-  state.phaseIndex = 0;
-  state.lastCount = null;
-  phaseLabel.textContent = PHASES[0].label;
-  cycleLabel.textContent = `Цикл 1 из ${settings.totalCycles}`;
-  countLabel.textContent = settings.phaseDuration;
+  state.paused = false;
   pauseIcon.innerHTML = ICON_PAUSE;
-  showScreen("session");       // сначала показать экран — SVG станет видимым
-  initGeometry();              // потом измерить геометрию
-  renderSession(0, 0, "inhale");
-  ensureAudio().then(() => playSound());
-  state.phaseStart = performance.now();
-  state.rafId = requestAnimationFrame(tick);
+  cycleLabel.textContent = `Цикл 1 из ${settings.totalCycles}`;
+  showScreen("session");
+  initGeometry();
+  renderSession(0, 0, "hold2");
+  ensureAudio().then(() => startCountdown());
   requestWakeLock();
 }
 
 function togglePause() {
-  if (!state.running) return;
+  // работает и во время отсчёта, и во время сессии
+  if (!state.running && state.countdownLeft <= 0) return;
+
+  if (state.countdownLeft > 0) {
+    // пауза во время отсчёта
+    if (state.paused) {
+      state.paused = false;
+      pauseIcon.innerHTML = ICON_PAUSE;
+      state.countdownTimer = setInterval(countdownStep, 1000);
+    } else {
+      state.paused = true;
+      pauseIcon.innerHTML = ICON_PLAY;
+      clearInterval(state.countdownTimer);
+    }
+    return;
+  }
+
   if (state.paused) {
     state.paused = false;
     pauseIcon.innerHTML = ICON_PAUSE;
@@ -262,9 +323,26 @@ function togglePause() {
   }
 }
 
+function countdownStep() {
+  state.countdownLeft--;
+  if (state.countdownLeft <= 0) {
+    clearInterval(state.countdownTimer);
+    state.paused = false;
+    beginSession();
+  } else {
+    countLabel.classList.remove("countdown");
+    void countLabel.offsetWidth;
+    countLabel.classList.add("countdown");
+    countLabel.textContent = state.countdownLeft;
+    playCountdownTick(false);
+  }
+}
+
 function stop() {
   state.running = false;
   state.paused = false;
+  state.countdownLeft = 0;
+  clearInterval(state.countdownTimer);
   cancelAnimationFrame(state.rafId);
   releaseWakeLock();
   renderSettings();
@@ -339,6 +417,8 @@ pickerScroll.addEventListener("scroll", () => {
 }, { passive: true });
 
 function openPicker({ title, items, value, onDone }) {
+  sheet.classList.remove("closing");
+  sheetBackdrop.classList.remove("closing");
   $("sheet-title").textContent = title;
   buildPicker(items, value);
   picker.onDone = onDone;
@@ -347,9 +427,19 @@ function openPicker({ title, items, value, onDone }) {
 }
 
 function closePicker(apply) {
-  if (apply && picker && picker.onDone) picker.onDone(picker.items[picker.index].value);
-  sheet.classList.add("hidden");
-  sheetBackdrop.classList.add("hidden");
+  if (apply && picker && picker.onDone) {
+    const targetId = picker.targetValueId;
+    picker.onDone(picker.items[picker.index].value);
+    if (targetId) pulseValue($(targetId));
+  }
+  sheet.classList.add("closing");
+  sheetBackdrop.classList.add("closing");
+  setTimeout(() => {
+    sheet.classList.add("hidden");
+    sheetBackdrop.classList.add("hidden");
+    sheet.classList.remove("closing");
+    sheetBackdrop.classList.remove("closing");
+  }, 250);
   renderSettings();
   saveSettings();
 }
@@ -358,12 +448,14 @@ function openPhasePicker() {
   const items = [];
   for (let i = 2; i <= 10; i++) items.push({ value: i, label: `${i} сек` });
   openPicker({ title: "Длительность фазы", items, value: settings.phaseDuration, onDone: (v) => { settings.phaseDuration = v; } });
+  picker.targetValueId = "phase-value";
 }
 
 function openCyclesPicker() {
   const items = [];
   for (let i = 1; i <= 20; i++) items.push({ value: i, label: `${i}` });
   openPicker({ title: "Циклы", items, value: settings.totalCycles, onDone: (v) => { settings.totalCycles = v; } });
+  picker.targetValueId = "cycles-value";
 }
 
 function toggleSound() {
@@ -374,8 +466,7 @@ function toggleSound() {
 }
 
 /* ================================================================
-   Единая обработка нажатий.
-   На touch: touchend (без дублей). На десктопе: click.
+   Единая обработка нажатий
 ================================================================ */
 const actions = {
   "btn-start": start,
@@ -404,11 +495,10 @@ document.addEventListener("click", (e) => {
   if (el && actions[el.id]) fireAction(el);
 });
 
-// страховка для iOS standalone: touchend на интерактивных элементах
 document.addEventListener("touchend", (e) => {
   const el = e.target.closest("[id]");
   if (el && actions[el.id]) {
-    e.preventDefault(); // не даём сгенерировать click-дубль
+    e.preventDefault();
     fireAction(el);
   }
 }, { passive: false });
@@ -423,3 +513,4 @@ if ("serviceWorker" in navigator) {
 }
 
 renderSettings();
+
