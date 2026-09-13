@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
 
-  <!-- PWA / iOS -->
   <title>Дыхание</title>
   <meta name="description" content="Таймер квадратного дыхания">
   <meta name="theme-color" content="#000000">
@@ -39,17 +38,10 @@
           <span class="list__label">Циклы</span>
           <span class="list__value"><span id="cycles-value">5</span><span class="list__chevron">›</span></span>
         </button>
-      </div>
-
-      <div class="list list--spaced">
+        <div class="list__sep"></div>
         <button class="list__row" id="row-sound">
           <span class="list__label">Звук</span>
           <span class="toggle" id="toggle-sound"><span class="toggle__knob"></span></span>
-        </button>
-        <div class="list__sep"></div>
-        <button class="list__row" id="row-sound-file">
-          <span class="list__label">Свой звук</span>
-          <span class="list__value"><span id="sound-file-value">Стандартный</span><span class="list__chevron">›</span></span>
         </button>
       </div>
 
@@ -104,7 +96,7 @@
 
   </main>
 
-  <!-- Picker sheet (нативный scroll-snap) -->
+  <!-- Picker sheet -->
   <div class="sheet-backdrop hidden" id="sheet-backdrop"></div>
   <div class="sheet hidden" id="sheet">
     <div class="sheet__grabber"></div>
@@ -117,14 +109,11 @@
       <div class="picker__highlight"></div>
       <div class="picker__scroll" id="picker-scroll">
         <div class="picker__spacer"></div>
-        <!-- items -->
         <div class="picker__spacer"></div>
       </div>
     </div>
+    <div class="sheet__safe"></div>
   </div>
-
-  <!-- Скрытый input для загрузки звука -->
-  <input type="file" id="sound-input" accept="audio/*" class="hidden">
 
   <script src="app.js"></script>
 </body>

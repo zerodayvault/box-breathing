@@ -1,4 +1,4 @@
-﻿/* ===== Дыхание — таймер + нативный scroll-snap пикер + свой звук ===== */
+﻿/* ===== Дыхание — таймер + пикер + звук из файла ===== */
 
 const PHASES = [
   { key: "inhale", label: "Вдох"  },
@@ -9,8 +9,9 @@ const PHASES = [
 
 const SCALE_MIN = 0.93;
 const SCALE_MAX = 1.04;
+const SOUND_URL = "sounds/phase.wav";
 
-/* ---------- Настройки (localStorage) ---------- */
+/* ---------- Настройки ---------- */
 const defaults = { phaseDuration: 4, totalCycles: 5, sound: true };
 let settings = { ...defaults };
 try {
@@ -19,54 +20,6 @@ try {
 
 function saveSettings() {
   try { localStorage.setItem("breath-settings", JSON.stringify(settings)); } catch (e) {}
-}
-
-/* ---------- Свой звук (IndexedDB) ---------- */
-const DB_NAME = "breath-db";
-const DB_STORE = "audio";
-let customSoundBuffer = null;   // AudioBuffer
-let customSoundName = null;
-
-function dbOpen() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(DB_STORE);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function dbSaveSound(blob, name) {
-  const db = await dbOpen();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(DB_STORE, "readwrite");
-    tx.objectStore(DB_STORE).put({ blob, name }, "custom");
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-async function dbLoadSound() {
-  try {
-    const db = await dbOpen();
-    return await new Promise((resolve) => {
-      const req = db.transaction(DB_STORE, "readonly").objectStore(DB_STORE).get("custom");
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => resolve(null);
-    });
-  } catch (e) { return null; }
-}
-
-async function dbDeleteSound() {
-  try {
-    const db = await dbOpen();
-    return await new Promise((resolve) => {
-      const tx = db.transaction(DB_STORE, "readwrite");
-      tx.objectStore(DB_STORE).delete("custom");
-      tx.oncomplete = resolve;
-      tx.onerror = resolve;
-    });
-  } catch (e) {}
 }
 
 const state = {
@@ -78,6 +31,7 @@ const state = {
   pauseStart: 0,
   rafId: null,
   audioCtx: null,
+  audioBuffer: null,   // декодированный звук из файла
   lastCount: null,
 };
 
@@ -113,47 +67,57 @@ function showScreen(name) {
   screens[name].classList.remove("hidden");
 }
 
-/* ---------- Список настроек ---------- */
 function renderSettings() {
   $("phase-value").textContent = `${settings.phaseDuration} сек`;
   $("cycles-value").textContent = `${settings.totalCycles}`;
   $("toggle-sound").classList.toggle("on", settings.sound);
-  $("sound-file-value").textContent = customSoundName || "Стандартный";
   $("total-hint").textContent = `Итого ${formatDuration(settings.phaseDuration * 4 * settings.totalCycles)}`;
 }
 
-/* ---------- Звук ---------- */
-function getAudioCtx() {
-  if (!state.audioCtx) {
-    state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+/* ---------- Звук ----------
+   AudioContext создаётся и разблокируется ТОЛЬКО в момент тапа
+   (user gesture) — иначе Safari блокирует старт. */
+async function ensureAudio() {
+  try {
+    if (!state.audioCtx) {
+      state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (state.audioCtx.state === "suspended") {
+      await state.audioCtx.resume();
+    }
+    if (!state.audioBuffer) {
+      const res = await fetch(SOUND_URL);
+      const buf = await res.arrayBuffer();
+      state.audioBuffer = await state.audioCtx.decodeAudioData(buf);
+    }
+  } catch (e) {
+    state.audioBuffer = null; // останется fallback-синтез
   }
-  if (state.audioCtx.state === "suspended") state.audioCtx.resume();
-  return state.audioCtx;
 }
 
-function beep(freq = 660, duration = 0.12) {
-  if (!settings.sound) return;
+function playSound() {
+  if (!settings.sound || !state.audioCtx) return;
   try {
-    const ctx = getAudioCtx();
-    if (customSoundBuffer) {
+    const ctx = state.audioCtx;
+    if (state.audioBuffer) {
       const src = ctx.createBufferSource();
       const gain = ctx.createGain();
-      src.buffer = customSoundBuffer;
-      gain.gain.setValueAtTime(0.5, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + Math.min(customSoundBuffer.duration, 1.2));
+      src.buffer = state.audioBuffer;
+      gain.gain.value = 0.6;
       src.connect(gain).connect(ctx.destination);
       src.start();
-      return;
+    } else {
+      // fallback: синтезированный сигнал
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.07, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.15);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15);
     }
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0.07, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + duration);
   } catch (e) {}
 }
 
@@ -162,9 +126,7 @@ function easeInOutSine(t) {
   return -(Math.cos(Math.PI * t) - 1) / 2;
 }
 
-/* ---------- Геометрия квадрата: 100% синхронизация ----------
-   Точка позиционируется через getPointAtLength() того же самого
-   rect, что и обводка — расхождение невозможно. */
+/* ---------- Геометрия: точка и обводка по одному getPointAtLength ---------- */
 const VIEW = 300;
 const trackRect = document.querySelector(".box__track");
 const PERIMETER = trackRect.getTotalLength();
@@ -233,7 +195,7 @@ function nextPhase(now) {
   phaseLabel.textContent = PHASES[state.phaseIndex].label;
   animatePhaseSwap();
   state.phaseStart = now;
-  beep(state.phaseIndex === 0 ? 880 : 660);
+  playSound();
 }
 
 /* ---------- Управление ---------- */
@@ -252,7 +214,8 @@ function start() {
   pauseIcon.innerHTML = ICON_PAUSE;
   renderSession(0, 0, "inhale");
   showScreen("session");
-  beep(880);
+  // аудио разблокируется этим же тапом
+  ensureAudio().then(() => playSound());
   state.phaseStart = performance.now();
   state.rafId = requestAnimationFrame(tick);
   requestWakeLock();
@@ -289,8 +252,8 @@ function finish() {
   const totalSec = settings.phaseDuration * 4 * settings.totalCycles;
   $("done-text").textContent =
     `${settings.totalCycles} ${plural(settings.totalCycles, "цикл", "цикла", "циклов")} · ${formatDuration(totalSec)}`;
-  beep(880, 0.2);
-  setTimeout(() => beep(1100, 0.25), 250);
+  playSound();
+  setTimeout(() => playSound(), 300);
   showScreen("done");
 }
 
@@ -309,20 +272,17 @@ document.addEventListener("visibilitychange", () => {
 });
 
 /* ================================================================
-   Пикер: нативный scroll с CSS scroll-snap (инерция и rubber-band —
-   настоящие, от браузера). На iOS ощущается как UIPickerView.
+   Пикер: нативный scroll + scroll-snap
 ================================================================ */
 const PICKER_ITEM_H = 36;
-const PICKER_SPACER_H = 90;
 
 const sheet = $("sheet");
 const sheetBackdrop = $("sheet-backdrop");
 const pickerScroll = $("picker-scroll");
 
-let picker = null; // { items, index, onDone, scrollTimer }
+let picker = null;
 
 function buildPicker(items, selectedValue) {
-  // очистить, оставив спейсеры
   pickerScroll.querySelectorAll(".picker__item").forEach((el) => el.remove());
   const spacerEnd = pickerScroll.querySelectorAll(".picker__spacer")[1];
   items.forEach((it) => {
@@ -332,8 +292,9 @@ function buildPicker(items, selectedValue) {
     pickerScroll.insertBefore(div, spacerEnd);
   });
   const index = Math.max(0, items.findIndex((i) => i.value === selectedValue));
-  picker = { items, index, onDone: null, scrollTimer: null, lastIndex: index };
-  pickerScroll.scrollTop = index * PICKER_ITEM_H;
+  picker = { items, index, onDone: null, scrollTimer: null };
+  // scrollTop после layout — иначе Safari/Chromium сбрасывает в 0
+  requestAnimationFrame(() => { pickerScroll.scrollTop = index * PICKER_ITEM_H; });
 }
 
 function pickerIndexFromScroll() {
@@ -342,14 +303,9 @@ function pickerIndexFromScroll() {
 
 pickerScroll.addEventListener("scroll", () => {
   if (!picker) return;
-  const idx = pickerIndexFromScroll();
-  if (idx !== picker.lastIndex) {
-    picker.lastIndex = idx;
-    picker.index = idx;
-  }
+  picker.index = pickerIndexFromScroll();
   clearTimeout(picker.scrollTimer);
   picker.scrollTimer = setTimeout(() => {
-    // доводка до ближайшего элемента после остановки
     const target = pickerIndexFromScroll() * PICKER_ITEM_H;
     if (Math.abs(pickerScroll.scrollTop - target) > 1) {
       pickerScroll.scrollTo({ top: target, behavior: "smooth" });
@@ -399,83 +355,18 @@ $("row-cycles").addEventListener("click", () => {
   });
 });
 
-/* ---------- Звук: тумблер + загрузка своего ---------- */
 $("row-sound").addEventListener("click", () => {
   settings.sound = !settings.sound;
   saveSettings();
   renderSettings();
-  if (settings.sound) beep(660, 0.1); // сразу проверить
+  if (settings.sound) ensureAudio().then(() => playSound());
 });
-
-const soundInput = $("sound-input");
-$("row-sound-file").addEventListener("click", () => {
-  if (customSoundName) {
-    // долгое нажатие не нужно — простое меню: тап = заменить, двойной смысл через confirm
-    const replace = confirm("Заменить звук? (Отмена — вернуть стандартный)");
-    if (replace) soundInput.click();
-    else {
-      customSoundBuffer = null;
-      customSoundName = null;
-      dbDeleteSound();
-      renderSettings();
-    }
-  } else {
-    soundInput.click();
-  }
-});
-
-soundInput.addEventListener("change", async () => {
-  const file = soundInput.files && soundInput.files[0];
-  if (!file) return;
-  try {
-    const ctx = getAudioCtx();
-    const buf = await file.arrayBuffer();
-    customSoundBuffer = await ctx.decodeAudioData(buf);
-    customSoundName = file.name.replace(/\.[^.]+$/, "");
-    if (customSoundName.length > 18) customSoundName = customSoundName.slice(0, 17) + "…";
-    await dbSaveSound(file, customSoundName);
-    beep(); // предпрослушка
-  } catch (e) {
-    alert("Не удалось прочитать аудиофайл");
-  }
-  soundInput.value = "";
-  renderSettings();
-});
-
-// восстановить сохранённый звук
-(async () => {
-  const saved = await dbLoadSound();
-  if (saved && saved.blob) {
-    try {
-      const ctx = getAudioCtxSafe();
-      if (ctx) {
-        const buf = await saved.blob.arrayBuffer();
-        // декодируем лениво при первом старте — AudioContext может быть заблокирован до жеста
-        pendingSoundBuf = buf;
-        customSoundName = saved.name;
-      }
-    } catch (e) {}
-  }
-  renderSettings();
-})();
-
-let pendingSoundBuf = null;
-function getAudioCtxSafe() {
-  try { return getAudioCtx(); } catch (e) { return null; }
-}
-async function decodePending() {
-  if (pendingSoundBuf && !customSoundBuffer) {
-    try {
-      customSoundBuffer = await getAudioCtx().decodeAudioData(pendingSoundBuf.slice(0));
-    } catch (e) {}
-  }
-}
 
 /* ---------- События ---------- */
-$("btn-start").addEventListener("click", () => { decodePending(); start(); });
+$("btn-start").addEventListener("click", start);
 $("btn-pause").addEventListener("click", togglePause);
 $("btn-stop").addEventListener("click", stop);
-$("btn-again").addEventListener("click", () => { decodePending(); start(); });
+$("btn-again").addEventListener("click", start);
 $("btn-settings").addEventListener("click", stop);
 
 /* ---------- Service Worker ---------- */
@@ -486,3 +377,4 @@ if ("serviceWorker" in navigator) {
 }
 
 renderSettings();
+

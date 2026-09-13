@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = "box-breathing-v5";
+﻿const CACHE_NAME = "box-breathing-v6";
 const ASSETS = [
   "./",
   "./index.html",
@@ -8,6 +8,7 @@ const ASSETS = [
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/apple-touch-icon.png",
+  "./sounds/phase.wav",
 ];
 
 self.addEventListener("install", (event) => {
@@ -31,7 +32,3 @@ self.addEventListener("fetch", (event) => {
     caches.match(event.request).then((cached) => cached || fetch(event.request))
   );
 });
-
-
-
-

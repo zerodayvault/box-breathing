@@ -44,6 +44,9 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+.screen--setup, .screen--done {
   animation: screenIn 0.4s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
@@ -82,8 +85,6 @@ body {
   overflow: hidden;
 }
 
-.list--spaced { margin-top: 20px; }
-
 .list__row {
   display: flex;
   align-items: center;
@@ -116,10 +117,6 @@ body {
   align-items: center;
   gap: 7px;
   font-variant-numeric: tabular-nums;
-  max-width: 55%;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .list__chevron {
@@ -138,6 +135,7 @@ body {
   position: relative;
   transition: background 0.25s ease;
   flex-shrink: 0;
+  pointer-events: none;
 }
 
 .toggle__knob {
@@ -196,14 +194,19 @@ body {
 .btn-text:active { opacity: 0.5; }
 
 /* ---------- Session ---------- */
-.screen--session { justify-content: center; gap: 0; }
+.screen--session {
+  justify-content: center;
+  gap: 0;
+  position: relative;
+}
 
 .session__top {
   position: absolute;
-  top: calc(var(--safe-top) + 26px);
+  top: calc(var(--safe-top) + 14px);
   left: 0;
   right: 0;
   text-align: center;
+  pointer-events: none;
 }
 
 .session__cycle {
@@ -366,7 +369,7 @@ body {
 
 .screen--done .btn-start { margin-top: 30px; }
 
-/* ---------- Picker sheet (нативный scroll-snap) ---------- */
+/* ---------- Picker sheet ---------- */
 .sheet-backdrop {
   position: fixed;
   inset: 0;
@@ -385,7 +388,6 @@ body {
   z-index: 11;
   background: var(--grouped-bg);
   border-radius: 14px 14px 0 0;
-  padding-bottom: var(--safe-bottom);
   animation: sheetUp 0.35s cubic-bezier(0.32, 0.72, 0, 1);
   max-width: 480px;
   margin: 0 auto;
@@ -394,6 +396,12 @@ body {
 @keyframes sheetUp {
   from { transform: translateY(100%); }
   to   { transform: none; }
+}
+
+/* заливка safe-area снизу тем же цветом — никакой рамки */
+.sheet__safe {
+  height: var(--safe-bottom);
+  background: var(--grouped-bg);
 }
 
 .sheet__grabber {
@@ -464,7 +472,7 @@ body {
 
 .picker__scroll::-webkit-scrollbar { display: none; }
 
-.picker__spacer { height: 90px; } /* (216-36)/2 */
+.picker__spacer { height: 90px; }
 
 .picker__item {
   height: 36px;
@@ -479,7 +487,6 @@ body {
   scroll-snap-stop: always;
 }
 
-/* iPhone 14 and similar heights */
 @media (max-height: 700px) {
   .header__title { font-size: 30px; }
   .session__count { font-size: 64px; }
@@ -491,5 +498,4 @@ body {
   .session__phase.swap, .session__count.tick,
   .sheet, .sheet-backdrop { animation: none; }
   .done__badge-circle, .done__badge-check { stroke-dashoffset: 0; }
-  .picker__scroll { scroll-snap-type: none; }
 }
