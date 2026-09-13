@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
 
   <!-- PWA / iOS -->
-  <title>Квадратное дыхание</title>
-  <meta name="description" content="Таймер квадратного дыхания 4-4-4-4">
-  <meta name="theme-color" content="#0b0e13">
+  <title>Дыхание</title>
+  <meta name="description" content="Таймер квадратного дыхания">
+  <meta name="theme-color" content="#000000">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -24,48 +24,50 @@
 
     <!-- Экран настройки -->
     <section class="screen screen--setup" id="screen-setup">
-      <h1 class="title">Квадратное<br>дыхание</h1>
-      <p class="subtitle">Вдох · Пауза · Выдох · Пауза</p>
+      <header class="header">
+        <h1 class="header__title">Дыхание</h1>
+        <p class="header__subtitle">Квадратная техника 4-4-4-4</p>
+      </header>
 
-      <div class="settings">
-        <div class="setting">
-          <span class="setting__label">Длительность фазы</span>
-          <div class="stepper">
-            <button class="stepper__btn" id="phase-minus" aria-label="Меньше">−</button>
-            <span class="stepper__value" id="phase-value">4 с</span>
-            <button class="stepper__btn" id="phase-plus" aria-label="Больше">+</button>
-          </div>
-        </div>
-
-        <div class="setting">
-          <span class="setting__label">Количество циклов</span>
-          <div class="stepper">
-            <button class="stepper__btn" id="cycles-minus" aria-label="Меньше">−</button>
-            <span class="stepper__value" id="cycles-value">5</span>
-            <button class="stepper__btn" id="cycles-plus" aria-label="Больше">+</button>
-          </div>
-        </div>
+      <div class="list">
+        <button class="list__row" id="row-phase">
+          <span class="list__label">Длительность фазы</span>
+          <span class="list__value"><span id="phase-value">4 сек</span><span class="list__chevron">›</span></span>
+        </button>
+        <div class="list__sep"></div>
+        <button class="list__row" id="row-cycles">
+          <span class="list__label">Циклы</span>
+          <span class="list__value"><span id="cycles-value">5</span><span class="list__chevron">›</span></span>
+        </button>
+        <div class="list__sep"></div>
+        <button class="list__row" id="row-sound">
+          <span class="list__label">Звук</span>
+          <span class="list__value"><span id="sound-value">Вкл</span><span class="list__chevron">›</span></span>
+        </button>
+        <div class="list__sep"></div>
+        <button class="list__row" id="row-haptics">
+          <span class="list__label">Вибрация</span>
+          <span class="list__value"><span id="haptics-value">Вкл</span><span class="list__chevron">›</span></span>
+        </button>
       </div>
 
-      <button class="btn btn--primary" id="btn-start">Начать</button>
+      <p class="hint" id="total-hint">Итого 1 мин 20 сек</p>
+
+      <button class="btn-start" id="btn-start">Начать</button>
     </section>
 
     <!-- Экран сессии -->
     <section class="screen screen--session hidden" id="screen-session">
       <div class="session__top">
-        <span class="session__cycle" id="cycle-label">Цикл 1 / 5</span>
+        <span class="session__cycle" id="cycle-label">Цикл 1 из 5</span>
       </div>
 
       <div class="box-stage">
         <div class="box" id="box">
-          <div class="box__edge box__edge--top"></div>
-          <div class="box__edge box__edge--right"></div>
-          <div class="box__edge box__edge--bottom"></div>
-          <div class="box__edge box__edge--left"></div>
-          <div class="box__fill box__fill--top" id="fill-top"></div>
-          <div class="box__fill box__fill--right" id="fill-right"></div>
-          <div class="box__fill box__fill--bottom" id="fill-bottom"></div>
-          <div class="box__fill box__fill--left" id="fill-left"></div>
+          <svg class="box__svg" id="box-svg" viewBox="0 0 300 300" fill="none" aria-hidden="true">
+            <rect class="box__track" x="14" y="14" width="272" height="272" rx="56" ry="56"/>
+            <rect class="box__progress" id="box-progress" x="14" y="14" width="272" height="272" rx="56" ry="56"/>
+          </svg>
           <div class="dot" id="dot"></div>
         </div>
         <div class="session__center">
@@ -75,23 +77,46 @@
       </div>
 
       <div class="session__controls">
-        <button class="btn btn--ghost" id="btn-pause">Пауза</button>
-        <button class="btn btn--ghost" id="btn-stop">Закончить</button>
+        <button class="btn-circle" id="btn-stop" aria-label="Закончить">
+          <svg viewBox="0 0 24 24" width="26" height="26"><rect x="6" y="6" width="12" height="12" rx="3" fill="currentColor"/></svg>
+        </button>
+        <button class="btn-circle btn-circle--accent" id="btn-pause" aria-label="Пауза">
+          <svg viewBox="0 0 24 24" width="26" height="26" id="pause-icon"><rect x="6" y="5" width="4" height="14" rx="1.6" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1.6" fill="currentColor"/></svg>
+        </button>
       </div>
     </section>
 
     <!-- Экран завершения -->
     <section class="screen screen--done hidden" id="screen-done">
-      <div class="done__badge"><svg viewBox="0 0 52 52" width="72" height="72" aria-hidden="true"><circle class="done__badge-circle" cx="26" cy="26" r="24" fill="none"/><path class="done__badge-check" fill="none" d="M14 27l8 8 16-17"/></svg></div>
-      <h2 class="done__title">Готово!</h2>
-      <p class="done__text" id="done-text">5 циклов · 80 секунд</p>
-      <button class="btn btn--primary" id="btn-again">Ещё раз</button>
-      <button class="btn btn--ghost" id="btn-settings">Настройки</button>
+      <div class="done__badge">
+        <svg viewBox="0 0 52 52" width="84" height="84" aria-hidden="true">
+          <circle class="done__badge-circle" cx="26" cy="26" r="24" fill="none"/>
+          <path class="done__badge-check" fill="none" d="M14 27l8 8 16-17"/>
+        </svg>
+      </div>
+      <h2 class="done__title">Готово</h2>
+      <p class="done__text" id="done-text">5 циклов · 1 мин 20 сек</p>
+      <button class="btn-start" id="btn-again">Ещё раз</button>
+      <button class="btn-text" id="btn-settings">Изменить настройки</button>
     </section>
 
   </main>
 
+  <!-- Picker sheet -->
+  <div class="sheet-backdrop hidden" id="sheet-backdrop"></div>
+  <div class="sheet hidden" id="sheet">
+    <div class="sheet__grabber"></div>
+    <div class="sheet__nav">
+      <button class="sheet__nav-btn" id="sheet-cancel">Отмена</button>
+      <span class="sheet__nav-title" id="sheet-title">Длительность фазы</span>
+      <button class="sheet__nav-btn sheet__nav-btn--bold" id="sheet-done">Готово</button>
+    </div>
+    <div class="picker" id="picker">
+      <div class="picker__highlight"></div>
+      <div class="picker__wheel" id="picker-wheel"></div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>
-
