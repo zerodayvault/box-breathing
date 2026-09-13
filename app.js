@@ -123,20 +123,49 @@ function easeInOutSine(t) {
   return -(Math.cos(Math.PI * t) - 1) / 2;
 }
 
-/* ---------- Геометрия ---------- */
+/* ---------- Геометрия ----------
+   ВАЖНО: getTotalLength/getPointAtLength на скрытом SVG в Safari бросает
+   исключение или возвращает мусор — инициализируем лениво при первом старте. */
 const VIEW = 300;
-const trackRect = document.querySelector(".box__track");
-const PERIMETER = trackRect.getTotalLength();
+let geo = null; // { perimeter }
 
-boxProgress.style.strokeDasharray = `${PERIMETER}`;
+function initGeometry() {
+  if (geo) return geo;
+  try {
+    const trackRect = document.querySelector(".box__track");
+    const perimeter = trackRect.getTotalLength();
+    boxProgress.style.strokeDasharray = `${perimeter}`;
+    geo = { perimeter };
+  } catch (e) {
+    // fallback: теоретический периметр скруглённого квадрата
+    const side = 272, r = 56;
+    const perimeter = (side - 2 * r) * 4 + (Math.PI / 2) * r * 4;
+    boxProgress.style.strokeDasharray = `${perimeter}`;
+    geo = { perimeter };
+  }
+  return geo;
+}
 
 function renderSession(overallProgress, phaseProgress, phaseKey) {
-  const len = overallProgress * PERIMETER;
-  boxProgress.style.strokeDashoffset = `${PERIMETER - len}`;
+  const { perimeter } = initGeometry();
+  const len = overallProgress * perimeter;
+  boxProgress.style.strokeDashoffset = `${perimeter - len}`;
 
-  const pt = trackRect.getPointAtLength(len);
-  dot.style.left = (pt.x / VIEW * 100) + "%";
-  dot.style.top = (pt.y / VIEW * 100) + "%";
+  try {
+    const pt = document.querySelector(".box__track").getPointAtLength(len);
+    dot.style.left = (pt.x / VIEW * 100) + "%";
+    dot.style.top = (pt.y / VIEW * 100) + "%";
+  } catch (e) {
+    // fallback: прямоугольная траектория без дуг
+    const p = ((overallProgress % 1) + 1) % 1;
+    let x, y;
+    if (p < 0.25)      { x = p / 0.25;             y = 0; }
+    else if (p < 0.5)  { x = 1;                    y = (p - 0.25) / 0.25; }
+    else if (p < 0.75) { x = 1 - (p - 0.5) / 0.25; y = 1; }
+    else               { x = 0;                    y = 1 - (p - 0.75) / 0.25; }
+    dot.style.left = (x * 100) + "%";
+    dot.style.top = (y * 100) + "%";
+  }
 
   const t = easeInOutSine(phaseProgress);
   let scale;
@@ -209,8 +238,9 @@ function start() {
   cycleLabel.textContent = `Цикл 1 из ${settings.totalCycles}`;
   countLabel.textContent = settings.phaseDuration;
   pauseIcon.innerHTML = ICON_PAUSE;
+  showScreen("session");       // сначала показать экран — SVG станет видимым
+  initGeometry();              // потом измерить геометрию
   renderSession(0, 0, "inhale");
-  showScreen("session");
   ensureAudio().then(() => playSound());
   state.phaseStart = performance.now();
   state.rafId = requestAnimationFrame(tick);
@@ -344,8 +374,8 @@ function toggleSound() {
 }
 
 /* ================================================================
-   Единая обработка нажатий: делегирование на document.
-   Работает и по click, и по pointerup (страховка для iOS standalone).
+   Единая обработка нажатий.
+   На touch: touchend (без дублей). На десктопе: click.
 ================================================================ */
 const actions = {
   "btn-start": start,
@@ -360,18 +390,29 @@ const actions = {
   "sheet-done": () => closePicker(true),
 };
 
-let lastFire = 0;
-function handleTap(e) {
-  const el = e.target.closest("[id]");
-  if (!el || !actions[el.id]) return;
+let lastActionAt = 0;
+
+function fireAction(el) {
   const now = Date.now();
-  if (now - lastFire < 350) return; // антидубль click+pointerup
-  lastFire = now;
-  actions[el.id]();
+  if (now - lastActionAt < 300) return;
+  lastActionAt = now;
+  try { actions[el.id](); } catch (e) {}
 }
 
-document.addEventListener("pointerup", handleTap);
-document.addEventListener("click", handleTap);
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[id]");
+  if (el && actions[el.id]) fireAction(el);
+});
+
+// страховка для iOS standalone: touchend на интерактивных элементах
+document.addEventListener("touchend", (e) => {
+  const el = e.target.closest("[id]");
+  if (el && actions[el.id]) {
+    e.preventDefault(); // не даём сгенерировать click-дубль
+    fireAction(el);
+  }
+}, { passive: false });
+
 sheetBackdrop.addEventListener("click", () => closePicker(false));
 
 /* ---------- Service Worker ---------- */
